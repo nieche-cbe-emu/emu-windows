@@ -1,0 +1,64 @@
+name: build-windows-exe
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 上传到哪个 release tag
+        required: false
+        default: v0.1.0
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: nieche-cbe-emu/emu-core
+          path: core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: install deps
+        run: pip install unicorn capstone pyinstaller
+
+      - name: assemble
+        shell: bash
+        run: |
+          cp -R core/emu core/cbelib .
+          ls
+
+      - name: build exe
+        run: >
+          pyinstaller --onefile --windowed --name NiecheEmu
+          --icon NONE
+          --add-data "emu;emu"
+          --add-data "cbelib;cbelib"
+          --add-data "logo.png;."
+          --collect-all unicorn
+          --collect-all capstone
+          nieche_win.py
+
+      - name: smoke test
+        shell: bash
+        run: |
+          ls -l dist
+          test -f dist/NiecheEmu.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NiecheEmu-windows-exe
+          path: dist/NiecheEmu.exe
+
+      - name: attach to release
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" dist/NiecheEmu.exe --clobber
