@@ -13,6 +13,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    # 默认令牌是只读的，上传 release 资产会 403
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
