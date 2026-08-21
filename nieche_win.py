@@ -25,7 +25,7 @@ from emu import paths
 
 KEYS = {
 
-    "lsk": 1 << 12, "rsk": 1 << 13, "call": 1 << 20, "end": 0,
+    "lsk": 1 << 12, "rsk": 1 << 13, "call": 1 << 20, "end": 1 << 13,
     "up": (1 << 2) | (1 << 17), "down": (1 << 8) | (1 << 18),
     "left": (1 << 4) | (1 << 15), "right": (1 << 6) | (1 << 16),
     "ok": (1 << 5) | (1 << 14),
@@ -201,6 +201,9 @@ class App:
     def press(self, kid):
         self.held.add(kid)
         self.sync_keys()
+
+        if self.session and kid in ("lsk", "rsk"):
+            self.session.soft_key("left" if kid == "lsk" else "right", True)
 
     def release(self, kid):
         self.held.discard(kid)
