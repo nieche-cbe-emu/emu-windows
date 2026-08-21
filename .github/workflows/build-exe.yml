@@ -36,6 +36,14 @@ jobs:
           python-version: '3.11'
           architecture: ${{ matrix.arch }}
 
+      # PyPI 上没有 win_arm64 的 unicorn / capstone 轮子，pip 会转去源码编译，
+      # 而裸的 runner 上 cmake 找不到 MSVC。先把编译环境准备好。
+      - name: setup msvc (arm64)
+        if: matrix.arch == 'arm64'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+
       - name: install deps
         run: pip install unicorn capstone pyinstaller
 
