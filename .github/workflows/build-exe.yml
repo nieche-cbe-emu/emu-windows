@@ -23,6 +23,9 @@ jobs:
           - arch: arm64
             runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
+    # arm64 卡在上游：unicorn 在 Windows/ARM64 上的构建还不成熟。
+    # 它失败不该拖垮 x64 的产出。
+    continue-on-error: ${{ matrix.arch == 'arm64' }}
     steps:
       - uses: actions/checkout@v4
 
