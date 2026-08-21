@@ -87,31 +87,55 @@ jobs:
           if [ "${{ matrix.arch }}" = "arm64" ]; then EXTRA="--paths pylibs"; fi
           # 只把字库当 data 带上。整个 emu 目录也塞 data 的话，
           # 解出来的源码目录会和 PyInstaller 冻结的同名包重叠。
+          DATA="--add-data emu/font12.cbef;emu --add-data logo.png;."
+          COLLECT="--collect-all unicorn --collect-all capstone"
+
           pyinstaller --onefile --windowed --name NiecheEmu-${{ matrix.arch }} \
-            --add-data "emu/font12.cbef;emu" --add-data "logo.png;." \
-            --collect-all unicorn --collect-all capstone \
-            ${EXTRA:-} nieche_win.py
+            $DATA $COLLECT $EXTRA nieche_win.py
           # 带控制台的诊断版：闪退时能直接看到 traceback
           pyinstaller --onefile --console --name NiecheEmu-${{ matrix.arch }}-debug \
-            --add-data "emu/font12.cbef;emu" --add-data "logo.png;." \
-            --collect-all unicorn --collect-all capstone \
-            ${EXTRA:-} nieche_win.py
+            $DATA $COLLECT $EXTRA nieche_win.py
+          # 目录版：不做临时解包，原生库直接躺在磁盘上。onefile 的解包
+          # 会改变 DLL 的加载路径与搜索顺序，ctypes 加载的原生库最容易在这里翻车。
+          pyinstaller --onedir --windowed --name NiecheEmu \
+            $DATA $COLLECT $EXTRA nieche_win.py
           ls -l dist
+
+      # 冻结出来的 exe 默认只保留 1MB 栈，而 CPython 官方的 python.exe 给的是 8MB。
+      # unicorn 的代码生成很吃栈，1MB 下溢出的表现正是"进程硬死、没有任何
+      # Python 异常、控制台一起关掉"——和用户报的现象完全一致。
+      - name: 加大栈
+        if: matrix.arch == 'x64'
+        shell: cmd
+        run: |
+          for /f "usebackq delims=" %%i in (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -find **\editbin.exe`) do set EDITBIN=%%i
+          echo using %EDITBIN%
+          "%EDITBIN%" /STACK:8388608 dist\NiecheEmu-x64.exe
+          "%EDITBIN%" /STACK:8388608 dist\NiecheEmu-x64-debug.exe
+          "%EDITBIN%" /STACK:8388608 dist\NiecheEmu\NiecheEmu.exe
+
+      - name: 打包目录版
+        shell: bash
+        run: |
+          cd dist && 7z a -tzip "NiecheEmu-${{ matrix.arch }}-folder.zip" NiecheEmu && ls -l
 
       - name: smoke test
         shell: bash
         run: |
           test -f "dist/NiecheEmu-${{ matrix.arch }}.exe"
           test -f "dist/NiecheEmu-${{ matrix.arch }}-debug.exe"
+          test -f "dist/NiecheEmu-${{ matrix.arch }}-folder.zip"
 
       - uses: actions/upload-artifact@v4
         with:
           name: NiecheEmu-${{ matrix.arch }}
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/*.zip
 
       - name: attach to release
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ inputs.tag }}" dist/*.exe --clobber
+        run: gh release upload "${{ inputs.tag }}" dist/*.exe dist/*.zip --clobber

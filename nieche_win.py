@@ -9,6 +9,7 @@ PPM(P6) 的 RGB888。逐像素算的话一帧 96000 次，纯 Python 扛不住 3
 所以预先建一张 65536 项的查表，每帧只做查表 + join。
 """
 import array
+import faulthandler
 import os
 import sys
 import time
@@ -178,8 +179,13 @@ class App:
 
     def start(self, path):
         self.stop()
+        breadcrumb(f"start: {path}")
         try:
-            self.session = Session(path, audio=False).boot()
+            breadcrumb("  构造 Session")
+            sess = Session(path, audio=False)
+            breadcrumb("  Session 已构造，开始 boot")
+            self.session = sess.boot()
+            breadcrumb("  boot 完成")
         except Exception:
             report(*sys.exc_info())
             return
@@ -187,6 +193,7 @@ class App:
         self.canvas.config(width=w * self.scale, height=h * self.scale)
         self.status.config(text=f"{os.path.basename(path)}  {w}x{h}")
         self.running = True
+        breadcrumb("  进入主循环")
         self.tick()
 
     def stop(self):
@@ -238,6 +245,8 @@ class App:
 
     def _tick_once(self):
         t0 = time.time()
+        if self.session.frame_no < 3:
+            breadcrumb(f"  第 {self.session.frame_no} 帧")
         self.session.set_keys(self.mask | self.latched)
         self.latched = 0
         px = self.session.step()
@@ -257,6 +266,31 @@ class App:
     def quit(self):
         self.stop()
         self.root.destroy()
+
+_trace_fp = None
+
+def log_path(name):
+    try:
+        base = paths.home()
+    except Exception:
+        base = os.path.expanduser("~")
+    return os.path.join(base, name)
+
+def breadcrumb(msg):
+
+    global _trace_fp
+    try:
+        if _trace_fp is None:
+            _trace_fp = open(log_path("startup.log"), "w", encoding="utf-8")
+            _trace_fp.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            _trace_fp.write(f"Python {sys.version}\n")
+            _trace_fp.write(f"frozen={getattr(sys, 'frozen', False)} "
+                            f"meipass={getattr(sys, '_MEIPASS', '-')}\n")
+        _trace_fp.write(msg + "\n")
+        _trace_fp.flush()
+        os.fsync(_trace_fp.fileno())
+    except Exception:
+        pass
 
 def crash_log_path():
     try:
@@ -285,6 +319,13 @@ def report(exc_type, exc, tb):
         pass
 
 def main():
+
+    try:
+        fh = open(log_path("fault.log"), "w")
+        faulthandler.enable(file=fh, all_threads=True)
+    except Exception:
+        pass
+    breadcrumb("main 开始")
     sys.excepthook = report
     tk.Tk.report_callback_exception = staticmethod(report)
     root = tk.Tk()
