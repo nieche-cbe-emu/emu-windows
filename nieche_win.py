@@ -180,8 +180,8 @@ class App:
         self.stop()
         try:
             self.session = Session(path, audio=False).boot()
-        except Exception as e:
-            messagebox.showerror("启动失败", f"{type(e).__name__}: {e}")
+        except Exception:
+            report(*sys.exc_info())
             return
         w, h = self.session.size
         self.canvas.config(width=w * self.scale, height=h * self.scale)
@@ -230,6 +230,13 @@ class App:
     def tick(self):
         if not self.running or not self.session:
             return
+        try:
+            self._tick_once()
+        except Exception:
+            self.running = False
+            report(*sys.exc_info())
+
+    def _tick_once(self):
         t0 = time.time()
         self.session.set_keys(self.mask | self.latched)
         self.latched = 0
@@ -251,7 +258,35 @@ class App:
         self.stop()
         self.root.destroy()
 
+def crash_log_path():
+    try:
+        return os.path.join(paths.home(), "crash.log")
+    except Exception:
+        return os.path.join(os.path.expanduser("~"), "nieche-emu-crash.log")
+
+def report(exc_type, exc, tb):
+
+    import traceback as _tb
+    text = "".join(_tb.format_exception(exc_type, exc, tb))
+    try:
+        with open(crash_log_path(), "a", encoding="utf-8") as f:
+            f.write("=" * 60 + "\n")
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+            f.write(f"Python {sys.version}\n")
+            f.write(f"frozen={getattr(sys, 'frozen', False)} "
+                    f"meipass={getattr(sys, '_MEIPASS', '-')}\n")
+            f.write(text + "\n")
+    except Exception:
+        pass
+    try:
+        messagebox.showerror("出错了",
+                             text[-1500:] + f"\n\n完整记录：{crash_log_path()}")
+    except Exception:
+        pass
+
 def main():
+    sys.excepthook = report
+    tk.Tk.report_callback_exception = staticmethod(report)
     root = tk.Tk()
     app = App(root)
     if len(sys.argv) > 1:

@@ -12,10 +12,17 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
-    # 默认令牌是只读的，上传 release 资产会 403
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -27,41 +34,44 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          architecture: ${{ matrix.arch }}
 
       - name: install deps
         run: pip install unicorn capstone pyinstaller
 
       - name: assemble
         shell: bash
-        run: |
-          cp -R core/emu core/cbelib .
-          ls
+        run: cp -R core/emu core/cbelib .
 
-      - name: build exe
-        run: >
-          pyinstaller --onefile --windowed --name NiecheEmu
-          --icon NONE
-          --add-data "emu;emu"
-          --add-data "cbelib;cbelib"
-          --add-data "logo.png;."
-          --collect-all unicorn
-          --collect-all capstone
-          nieche_win.py
+      - name: build
+        shell: bash
+        run: |
+          # 只把字库当 data 带上。整个 emu 目录也塞 data 的话，
+          # 解出来的源码目录会和 PyInstaller 冻结的同名包重叠。
+          common="--onefile --add-data emu/font12.cbef;emu --add-data logo.png;. --collect-all unicorn --collect-all capstone"
+          pyinstaller --onefile --windowed --name NiecheEmu-${{ matrix.arch }} \
+            --add-data "emu/font12.cbef;emu" --add-data "logo.png;." \
+            --collect-all unicorn --collect-all capstone nieche_win.py
+          # 带控制台的诊断版：闪退时能直接看到 traceback
+          pyinstaller --onefile --console --name NiecheEmu-${{ matrix.arch }}-debug \
+            --add-data "emu/font12.cbef;emu" --add-data "logo.png;." \
+            --collect-all unicorn --collect-all capstone nieche_win.py
+          ls -l dist
 
       - name: smoke test
         shell: bash
         run: |
-          ls -l dist
-          test -f dist/NiecheEmu.exe
+          test -f "dist/NiecheEmu-${{ matrix.arch }}.exe"
+          test -f "dist/NiecheEmu-${{ matrix.arch }}-debug.exe"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NiecheEmu-windows-exe
-          path: dist/NiecheEmu.exe
+          name: NiecheEmu-${{ matrix.arch }}
+          path: dist/*.exe
 
       - name: attach to release
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ inputs.tag }}" dist/NiecheEmu.exe --clobber
+        run: gh release upload "${{ inputs.tag }}" dist/*.exe --clobber
