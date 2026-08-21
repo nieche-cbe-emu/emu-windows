@@ -51,3 +51,12 @@ K 左软键，L 右软键，Esc 挂断，数字键直通。画面可直接点击
 所以还没能从固件侧读出手机键码到位的翻译表。这条线索还没走完。
 
 键位在模拟器里可以自己改。**欢迎带着实机对照的结果开 issue。**
+
+## 关于 Windows on ARM
+
+目前只出 x64 版。原生 ARM64 卡在上游：unicorn 的构建里有汇编，走的是 MSVC 的
+`masm.targets`，而 ARM64 工具链不支持 MASM（`MASM not supported on this platform`），
+换 ClangCL 工具集也一样。capstone 本身能编出 ARM64。
+
+实际影响不大：**Windows on ARM 自带 x64 模拟，x64 版可以直接跑**，只是性能有折损。
+工作流里 arm64 那一路仍然保留（标了 `continue-on-error`），等上游能编了就能出产物。
