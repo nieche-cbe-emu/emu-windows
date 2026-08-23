@@ -126,6 +126,16 @@ jobs:
           test -f "dist/NiecheEmu-${{ matrix.arch }}-debug.exe"
           test -f "dist/NiecheEmu-${{ matrix.arch }}-folder.zip"
 
+      # 真正在 Windows 上跑一遍原生层自检。用户报的闪退就崩在 Machine 构造的
+      # 第一个 mem_map 上，那之前不需要任何 .cbe，所以这里能完整复现。
+      - name: 原生层自检（单文件版）
+        shell: cmd
+        run: dist\NiecheEmu-${{ matrix.arch }}-debug.exe --uctest
+
+      - name: 原生层自检（目录版）
+        shell: cmd
+        run: dist\NiecheEmu\NiecheEmu.exe --uctest
+
       - uses: actions/upload-artifact@v4
         with:
           name: NiecheEmu-${{ matrix.arch }}
