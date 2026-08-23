@@ -60,3 +60,22 @@ K 左软键，L 右软键，Esc 挂断，数字键直通。画面可直接点击
 
 实际影响不大：**Windows on ARM 自带 x64 模拟，x64 版可以直接跑**，只是性能有折损。
 工作流里 arm64 那一路仍然保留（标了 `continue-on-error`），等上游能编了就能出产物。
+
+## 打包成 exe 必须关掉 CFG
+
+PyInstaller 的引导程序开着 Control Flow Guard，而 unicorn 的 JIT 会间接跳到
+运行时生成的代码上。CFG 把它判成非法的间接调用目标，直接 `__fastfail` 掉整个
+进程——退出码 `0xC0000409`（`STATUS_STACK_BUFFER_OVERRUN`），Python 层
+什么都留不下：没有异常、没有日志、连控制台窗口都一起消失。
+
+所以构建后必须补一步：
+
+```
+editbin /STACK:8388608 /GUARD:NO dist\NiecheEmu.exe
+```
+
+（`/STACK` 是顺带的：冻结出来的 exe 默认只留 1MB 栈，官方 python.exe 给的是 8MB。）
+
+工作流里有 `--uctest`：一段不依赖任何 .cbe 的原生层自检，会在 Windows runner 上
+分别用「不冻结 / 单文件 / 目录版」跑一遍。当初就是靠"不冻结通过、冻结的两个都在
+第一次 `emu_start` 挂掉"这个对照定位到 CFG 的。现在它是硬性门禁。

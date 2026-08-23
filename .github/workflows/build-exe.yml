@@ -145,12 +145,10 @@ jobs:
         run: python nieche_win.py --uctest
 
       - name: 自检 B - 单文件版
-        continue-on-error: true
         shell: cmd
         run: dist\NiecheEmu-${{ matrix.arch }}-debug.exe --uctest
 
       - name: 自检 C - 目录版
-        continue-on-error: true
         shell: cmd
         run: dist\NiecheEmu\NiecheEmu.exe --uctest
 
