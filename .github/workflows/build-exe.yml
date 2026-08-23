@@ -128,11 +128,22 @@ jobs:
 
       # 真正在 Windows 上跑一遍原生层自检。用户报的闪退就崩在 Machine 构造的
       # 第一个 mem_map 上，那之前不需要任何 .cbe，所以这里能完整复现。
-      - name: 原生层自检（单文件版）
+      # 三种形态都跑一遍，用来分辨"Windows 的问题"还是"PyInstaller 的问题"。
+      # 都设 continue-on-error，否则第一个挂掉后面就看不到了。
+      - name: 自检 A - 不冻结（对照组）
+        continue-on-error: true
+        shell: cmd
+        env:
+          PYTHONPATH: pylibs
+        run: python nieche_win.py --uctest
+
+      - name: 自检 B - 单文件版
+        continue-on-error: true
         shell: cmd
         run: dist\NiecheEmu-${{ matrix.arch }}-debug.exe --uctest
 
-      - name: 原生层自检（目录版）
+      - name: 自检 C - 目录版
+        continue-on-error: true
         shell: cmd
         run: dist\NiecheEmu\NiecheEmu.exe --uctest
 

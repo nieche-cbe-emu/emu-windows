@@ -370,9 +370,21 @@ def uctest():
         u.mem_map(base, size, UC_PROT_ALL)
         print("   %#x %dKB ok" % (base, size // 1024), flush=True)
 
-    print("6) run one instruction ...", flush=True)
+    print("6a) emu_start, 1 instruction ...", flush=True)
     u.emu_start(0x01000000, 0x01000004, 0, 1)
-    print("   ok", flush=True)
+    print("    ok", flush=True)
+
+    print("6b) emu_start, 4 instructions ...", flush=True)
+    u.mem_write(0x01000000, b"\x00\xf0\x20\xe3" * 8)
+    u.emu_start(0x01000000, 0x01000010, 0, 4)
+    print("    ok", flush=True)
+
+    print("7) add a code hook then run ...", flush=True)
+    from unicorn import UC_HOOK_CODE
+    seen = []
+    u.hook_add(UC_HOOK_CODE, lambda uc, a, sz, d: seen.append(a))
+    u.emu_start(0x01000000, 0x01000010, 0, 4)
+    print("    ok, hook fired", len(seen), "times", flush=True)
 
     print("UCTEST PASSED", flush=True)
 
