@@ -104,15 +104,22 @@ jobs:
       # 冻结出来的 exe 默认只保留 1MB 栈，而 CPython 官方的 python.exe 给的是 8MB。
       # unicorn 的代码生成很吃栈，1MB 下溢出的表现正是"进程硬死、没有任何
       # Python 异常、控制台一起关掉"——和用户报的现象完全一致。
-      - name: 加大栈
+      # 两处都要改：
+      # /STACK  —— 冻结出来的 exe 默认只留 1MB 栈，官方 python.exe 是 8MB。
+      # /GUARD:NO —— **这是闪退的真正原因**。PyInstaller 的引导程序开了
+      #   Control Flow Guard，而 unicorn 的 JIT 会间接跳到运行时生成的代码上，
+      #   CFG 判定为非法间接调用目标，直接 __fastfail 掉整个进程：
+      #   退出码 0xC0000409 (STATUS_STACK_BUFFER_OVERRUN)，没有任何 Python 异常。
+      #   同样的自检在不冻结的 Python 下是通过的，正好对上。
+      - name: 关掉 CFG 并加大栈
         if: matrix.arch == 'x64'
         shell: cmd
         run: |
           for /f "usebackq delims=" %%i in (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -find **\editbin.exe`) do set EDITBIN=%%i
           echo using %EDITBIN%
-          "%EDITBIN%" /STACK:8388608 dist\NiecheEmu-x64.exe
-          "%EDITBIN%" /STACK:8388608 dist\NiecheEmu-x64-debug.exe
-          "%EDITBIN%" /STACK:8388608 dist\NiecheEmu\NiecheEmu.exe
+          "%EDITBIN%" /STACK:8388608 /GUARD:NO dist\NiecheEmu-x64.exe
+          "%EDITBIN%" /STACK:8388608 /GUARD:NO dist\NiecheEmu-x64-debug.exe
+          "%EDITBIN%" /STACK:8388608 /GUARD:NO dist\NiecheEmu\NiecheEmu.exe
 
       - name: 打包目录版
         shell: bash
