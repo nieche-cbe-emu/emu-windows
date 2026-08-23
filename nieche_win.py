@@ -322,49 +322,59 @@ def uctest():
 
     import ctypes
     import ctypes.util
-    print("frozen =", getattr(sys, "frozen", False))
-    print("meipass =", getattr(sys, "_MEIPASS", "-"))
+    print("frozen =", getattr(sys, "frozen", False), flush=True)
+    print("meipass =", getattr(sys, "_MEIPASS", "-"), flush=True)
+    print("stdout encoding =", sys.stdout.encoding, flush=True)
+
     import unicorn
     from unicorn import Uc, UC_ARCH_ARM, UC_MODE_ARM, UC_MODE_LITTLE_ENDIAN, UC_PROT_ALL
     from unicorn.arm_const import UC_CPU_ARM_926
-    print("unicorn 版本:", getattr(unicorn, "__version__", "?"))
-    lib = getattr(unicorn.unicorn_py3.unicorn, "uclib", None) or          getattr(unicorn.unicorn, "_uc", None)
+    print("unicorn version:", getattr(unicorn, "__version__", "?"), flush=True)
+    print("unicorn pkg:", os.path.dirname(unicorn.__file__), flush=True)
     try:
-        print("unicorn.dll:", ctypes.util.find_library("unicorn") or lib._name)
+        from unicorn.unicorn_py3 import unicorn as _u3
+        print("uclib:", getattr(_u3.uclib, "_name", "?"), flush=True)
     except Exception as e:
-        print("unicorn.dll: 取不到 (", e, ")")
+        print("uclib: n/a", e, flush=True)
+
     import capstone
-    print("capstone 版本:", getattr(capstone, "__version__", "?"),
-          "cs_version:", capstone.cs_version())
+    print("capstone version:", getattr(capstone, "__version__", "?"),
+          capstone.cs_version(), flush=True)
+    print("capstone pkg:", os.path.dirname(capstone.__file__), flush=True)
 
-    print("1) 创建 Uc ...", flush=True)
+    print("1) create Uc ...", flush=True)
     u = Uc(UC_ARCH_ARM, UC_MODE_ARM | UC_MODE_LITTLE_ENDIAN)
-    print("   句柄 =", hex(getattr(u, "_uch", ctypes.c_void_p(0)).value or 0), flush=True)
+    h = getattr(u, "_uch", None)
+    print("   handle =", hex(getattr(h, "value", 0) or 0), flush=True)
 
-    print("2) 设置 CPU 型号 ARM926 ...", flush=True)
+    print("2) ctl_set_cpu_model(ARM926) ...", flush=True)
     try:
         u.ctl_set_cpu_model(UC_CPU_ARM_926)
-        print("   成功", flush=True)
+        print("   ok", flush=True)
     except Exception as e:
-        print("   失败:", type(e).__name__, e, flush=True)
+        print("   FAILED:", type(e).__name__, e, flush=True)
 
     print("3) mem_map(0x01000000, 1MB) ...", flush=True)
     u.mem_map(0x01000000, 0x100000, UC_PROT_ALL)
-    print("   成功", flush=True)
+    print("   ok", flush=True)
 
-    print("4) 写入并读回 ...", flush=True)
+    print("4) write + read back ...", flush=True)
     u.mem_write(0x01000000, b"\x00\xf0\x20\xe3" * 4)
     assert u.mem_read(0x01000000, 4) == b"\x00\xf0\x20\xe3"
-    print("   成功", flush=True)
+    print("   ok", flush=True)
 
-    print("5) 再映射几块（堆 256MB 等）...", flush=True)
+    print("5) map the rest (heap is 256MB) ...", flush=True)
     for base, size in ((0x20000000, 0x100000), (0x30000000, 0x100000),
                        (0x40000000, 0x10000000), (0x50000000, 0x40000),
                        (0x60000000, 0x400000), (0x0, 0x20000)):
         u.mem_map(base, size, UC_PROT_ALL)
-        print(f"   {base:#x} {size//1024}KB 成功", flush=True)
+        print("   %#x %dKB ok" % (base, size // 1024), flush=True)
 
-    print("uctest 全部通过")
+    print("6) run one instruction ...", flush=True)
+    u.emu_start(0x01000000, 0x01000004, 0, 1)
+    print("   ok", flush=True)
+
+    print("UCTEST PASSED", flush=True)
 
 def main():
     if "--uctest" in sys.argv:
