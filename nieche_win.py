@@ -22,6 +22,7 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.dirname(_HERE))
 
 from emu.host import Session
+from emu.native import open_session
 from emu import paths
 
 KEYS = {
@@ -182,8 +183,9 @@ class App:
         breadcrumb(f"start: {path}")
         try:
             breadcrumb("  构造 Session")
-            sess = Session(path, audio=False)
-            breadcrumb("  Session 已构造，开始 boot")
+
+            sess, self.core = open_session(path, audio=False)
+            breadcrumb(f"  Session 已构造（核心：{self.core}），开始 boot")
             self.session = sess.boot()
             breadcrumb("  boot 完成")
         except Exception:
@@ -191,7 +193,8 @@ class App:
             return
         w, h = self.session.size
         self.canvas.config(width=w * self.scale, height=h * self.scale)
-        self.status.config(text=f"{os.path.basename(path)}  {w}x{h}")
+        self.status.config(
+            text=f"{os.path.basename(path)}  {w}x{h}  [{self.core}]")
         self.running = True
         breadcrumb("  进入主循环")
         self.tick()
@@ -270,6 +273,7 @@ class App:
 _trace_fp = None
 
 def log_path(name):
+
     try:
         base = paths.home()
     except Exception:
