@@ -21,9 +21,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.dirname(_HERE))
 
-from emu.host import Session
-from emu.native import open_session
-from emu import paths
+import nieche
+from nieche import NiecheSession
 
 KEYS = {
 
@@ -151,7 +150,7 @@ class App:
                       "画面可直接点击，软键多数只吃触摸").pack(anchor="w", pady=8)
 
     def games_dir(self):
-        d = os.path.join(paths.home(), "games")
+        d = os.path.join(nieche.home(), "games")
         os.makedirs(d, exist_ok=True)
         return d
 
@@ -184,8 +183,8 @@ class App:
         try:
             breadcrumb("  构造 Session")
 
-            sess, self.core = open_session(path, audio=False)
-            breadcrumb(f"  Session 已构造（核心：{self.core}），开始 boot")
+            sess = NiecheSession(path, audio=False)
+            breadcrumb("  Session 已构造，开始 boot")
             self.session = sess.boot()
             breadcrumb("  boot 完成")
         except Exception:
@@ -193,8 +192,7 @@ class App:
             return
         w, h = self.session.size
         self.canvas.config(width=w * self.scale, height=h * self.scale)
-        self.status.config(
-            text=f"{os.path.basename(path)}  {w}x{h}  [{self.core}]")
+        self.status.config(text=f"{os.path.basename(path)}  {w}x{h}")
         self.running = True
         breadcrumb("  进入主循环")
         self.tick()
@@ -275,7 +273,7 @@ _trace_fp = None
 def log_path(name):
 
     try:
-        base = paths.home()
+        base = nieche.home()
     except Exception:
         base = os.path.expanduser("~")
     return os.path.join(base, name)
@@ -298,7 +296,7 @@ def breadcrumb(msg):
 
 def crash_log_path():
     try:
-        return os.path.join(paths.home(), "crash.log")
+        return os.path.join(nieche.home(), "crash.log")
     except Exception:
         return os.path.join(os.path.expanduser("~"), "nieche-emu-crash.log")
 
@@ -324,79 +322,18 @@ def report(exc_type, exc, tb):
 
 def uctest():
 
-    import ctypes
-    import ctypes.util
-    print("frozen =", getattr(sys, "frozen", False), flush=True)
-    print("meipass =", getattr(sys, "_MEIPASS", "-"), flush=True)
-    print("stdout encoding =", sys.stdout.encoding, flush=True)
-
-    import unicorn
-    from unicorn import Uc, UC_ARCH_ARM, UC_MODE_ARM, UC_MODE_LITTLE_ENDIAN, UC_PROT_ALL
-    from unicorn.arm_const import UC_CPU_ARM_926
-    print("unicorn version:", getattr(unicorn, "__version__", "?"), flush=True)
-    print("unicorn pkg:", os.path.dirname(unicorn.__file__), flush=True)
-    try:
-        from unicorn.unicorn_py3 import unicorn as _u3
-        print("uclib:", getattr(_u3.uclib, "_name", "?"), flush=True)
-    except Exception as e:
-        print("uclib: n/a", e, flush=True)
-
-    import capstone
-    print("capstone version:", getattr(capstone, "__version__", "?"),
-          capstone.cs_version(), flush=True)
-    print("capstone pkg:", os.path.dirname(capstone.__file__), flush=True)
-
-    print("1) create Uc ...", flush=True)
-    u = Uc(UC_ARCH_ARM, UC_MODE_ARM | UC_MODE_LITTLE_ENDIAN)
-    h = getattr(u, "_uch", None)
-    print("   handle =", hex(getattr(h, "value", 0) or 0), flush=True)
-
-    print("2) ctl_set_cpu_model(ARM926) ...", flush=True)
-    try:
-        u.ctl_set_cpu_model(UC_CPU_ARM_926)
-        print("   ok", flush=True)
-    except Exception as e:
-        print("   FAILED:", type(e).__name__, e, flush=True)
-
-    print("3) mem_map(0x01000000, 1MB) ...", flush=True)
-    u.mem_map(0x01000000, 0x100000, UC_PROT_ALL)
-    print("   ok", flush=True)
-
-    print("4) write + read back ...", flush=True)
-    u.mem_write(0x01000000, b"\x00\xf0\x20\xe3" * 4)
-    assert u.mem_read(0x01000000, 4) == b"\x00\xf0\x20\xe3"
-    print("   ok", flush=True)
-
-    print("5) map the rest (heap is 256MB) ...", flush=True)
-    for base, size in ((0x20000000, 0x100000), (0x30000000, 0x100000),
-                       (0x40000000, 0x10000000), (0x50000000, 0x40000),
-                       (0x60000000, 0x400000), (0x0, 0x20000)):
-        u.mem_map(base, size, UC_PROT_ALL)
-        print("   %#x %dKB ok" % (base, size // 1024), flush=True)
-
-    print("6a) emu_start, 1 instruction ...", flush=True)
-    u.emu_start(0x01000000, 0x01000004, 0, 1)
-    print("    ok", flush=True)
-
-    print("6b) emu_start, 4 instructions ...", flush=True)
-    u.mem_write(0x01000000, b"\x00\xf0\x20\xe3" * 8)
-    u.emu_start(0x01000000, 0x01000010, 0, 4)
-    print("    ok", flush=True)
-
-    print("7) add a code hook then run ...", flush=True)
-    from unicorn import UC_HOOK_CODE
-    seen = []
-    u.hook_add(UC_HOOK_CODE, lambda uc, a, sz, d: seen.append(a))
-    u.emu_start(0x01000000, 0x01000010, 0, 4)
-    print("    ok, hook fired", len(seen), "times", flush=True)
-
+    import nieche
+    print("core ABI:", nieche.load().nieche_abi_version(), flush=True)
+    print("selftest:", nieche.selftest(), flush=True)
+    if not nieche.selftest():
+        raise SystemExit("UCTEST FAILED")
     print("UCTEST PASSED", flush=True)
 
 def coretest():
 
-    from emu.native import load
+    import nieche
 
-    print("core ABI:", load().nieche_abi_version(), flush=True)
+    print("core ABI:", nieche.load().nieche_abi_version(), flush=True)
     print("CORETEST PASSED", flush=True)
 
 def main():
