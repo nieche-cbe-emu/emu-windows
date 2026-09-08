@@ -87,7 +87,12 @@ class App:
         self.latched = 0
         self.mask = 0
         self.scale = 2
+
         self.fps = 30
+
+        self.real_fps = 0.0
+        self._fps_n = 0
+        self._fps_t = time.time()
         self.img = None
         self.running = False
 
@@ -108,8 +113,19 @@ class App:
         self.canvas.bind("<Button-1>", lambda e: self.touch(e, "down"))
         self.canvas.bind("<B1-Motion>", lambda e: self.touch(e, "move"))
         self.canvas.bind("<ButtonRelease-1>", lambda e: self.touch(e, "up"))
-        self.status = tk.Label(mid, text="未加载模块", bg="#101014", fg="#9aa0a6")
-        self.status.pack(anchor="w", pady=4)
+        bottom = tk.Frame(mid, bg="#101014")
+        bottom.pack(anchor="w", fill="x", pady=4)
+        self.status = tk.Label(bottom, text="未加载模块", bg="#101014", fg="#9aa0a6")
+        self.status.pack(side="left")
+        tk.Label(bottom, text="  帧率", bg="#101014", fg="#9aa0a6").pack(side="left")
+
+        self.fps_var = tk.StringVar(value=str(self.fps))
+        e = tk.Entry(bottom, textvariable=self.fps_var, width=5, justify="right")
+        e.pack(side="left", padx=(2, 0))
+        e.bind("<Return>", self.apply_fps)
+        e.bind("<FocusOut>", self.apply_fps)
+        self.fps_label = tk.Label(bottom, text="", bg="#101014", fg="#9aa0a6")
+        self.fps_label.pack(side="left", padx=(6, 0))
 
         right = tk.Frame(root, bg="#101014")
         right.pack(side="left", fill="y", padx=8, pady=8)
@@ -235,6 +251,18 @@ class App:
         if self.session:
             self.session.set_touch(int(e.x / self.scale), int(e.y / self.scale), state)
 
+    FPS_MIN, FPS_MAX = 1, 240
+
+    def apply_fps(self, _evt=None):
+
+        try:
+            v = int(float(self.fps_var.get()))
+        except ValueError:
+            v = self.fps
+        v = max(self.FPS_MIN, min(v, self.FPS_MAX))
+        self.fps = v
+        self.fps_var.set(str(v))
+
     def tick(self):
         if not self.running or not self.session:
             return
@@ -261,6 +289,12 @@ class App:
             if ev.get("kind") == "exit":
                 self.stop()
                 return
+        self._fps_n += 1
+        dt = time.time() - self._fps_t
+        if dt >= 1.0:
+            self.real_fps = self._fps_n / dt
+            self._fps_n, self._fps_t = 0, time.time()
+            self.fps_label.config(text=f"实测 {self.real_fps:.1f}")
         delay = max(1, int(1000 / self.fps - (time.time() - t0) * 1000))
         self.root.after(delay, self.tick)
 
