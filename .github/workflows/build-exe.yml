@@ -20,7 +20,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: nieche-cbe-emu/emu-core
+          repository: nieche-cbe-emu/emu-core-rs
           path: core
 
       - uses: actions/setup-python@v5
@@ -28,8 +28,10 @@ jobs:
           python-version: '3.11'
           architecture: x64
 
+      # 只需要打包器。unicorn 和 capstone 在 nieche.dll 里面，
+      # 外壳不再用它们的 Python 绑定。
       - name: install deps
-        run: pip install unicorn capstone pyinstaller
+        run: pip install pyinstaller
 
       # Rust 核心。windows runner 自带 Rust，MSVC 目标直接就能编——
       # 这是 Windows 端唯一能拿到 Rust 核心的路子，macOS 上既没有 mingw
@@ -37,15 +39,15 @@ jobs:
       - name: build rust core
         shell: bash
         run: |
-          cd core/rust
+          cd core
           cargo build --release -p emuffi --lib
-          cd ../..
-          cp core/rust/target/release/nieche.dll .
+          cd ..
+          cp core/target/release/nieche.dll .
           ls -l nieche.dll
 
       - name: assemble
         shell: bash
-        run: cp -R core/emu core/cbelib .
+        run: cp core/python/nieche.py .
 
       - name: build
         shell: bash
@@ -53,9 +55,10 @@ jobs:
           EXTRA=""
           # 只把字库当 data 带上。整个 emu 目录也塞 data 的话，
           # 解出来的源码目录会和 PyInstaller 冻结的同名包重叠。
-          DATA="--add-data emu/font12.cbef;emu --add-data logo.png;."
+          # 字库在 Rust 核心里是 include_bytes! 进去的，不用另外带。
+          DATA="--add-data logo.png;."
           DATA="$DATA --add-binary nieche.dll;."
-          COLLECT="--collect-all unicorn --collect-all capstone"
+          COLLECT=""
 
           pyinstaller --onefile --windowed --name NiecheEmu-x64 \
             $DATA $COLLECT $EXTRA nieche_win.py
