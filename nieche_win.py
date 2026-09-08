@@ -395,7 +395,8 @@ def uctest():
 def coretest():
 
     from emu.native import load
-    print("核心 ABI:", load().nieche_abi_version(), flush=True)
+
+    print("core ABI:", load().nieche_abi_version(), flush=True)
     print("CORETEST PASSED", flush=True)
 
 def main():
