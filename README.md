@@ -1,41 +1,67 @@
 # emu-windows
 
-尼彩 CBE 模拟器的 Windows 外壳。只用标准库 tkinter，不需要额外的界面依赖。
+CoolBar `.cbe` 模拟器的 Windows 外壳。界面只用标准库 tkinter；模拟核心是
+[emu-core-rs](https://github.com/nieche-cbe-emu/emu-core-rs) 的 `nieche.dll`，
+经 `nieche.py`（ctypes）调用。
 
-模拟核心是 [emu-core-rs](https://github.com/nieche-cbe-emu/emu-core-rs) 的
-`nieche.dll`，经 `nieche.py`（ctypes）调用。
-**没有回落**——不需要也不会去用 Python 实现。
+## 特性
+
+- 仅依赖标准库，无第三方界面依赖
+- 键盘与虚拟键盘输入，鼠标点击映射为触摸
+- 帧率可任意设定，并显示实测帧率
+- 游戏库：记录用过的模块
+- `--uctest` / `--coretest` 两个自检入口，用于诊断打包产物
+
+## 环境要求
+
+- Windows x64
+- Python 3.11（带 tkinter）
+- `nieche.py` 与 `nieche.dll` 位于同级或上一级目录
 
 ## 运行
 
-```
+```bash
 python nieche_win.py
 ```
 
-需要 emu-core-rs 的 `python/nieche.py` 和构建好的 `nieche.dll`
-放在同级或上一级目录。
+## 命令行参数
+
+| 参数 | 说明 |
+|---|---|
+| `--uctest` | 让核心真跑几条 ARM 指令，验证 JIT 可用后退出 |
+| `--coretest` | 加载核心并打印 ABI 版本后退出 |
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `NIECHE_HOME` | `~/.nieche-emu` | 数据根：存档、游戏库与崩溃日志 |
+| `NIECHE_LIB` | 自动查找 | `nieche.dll` 的路径 |
+
+## 打包成 exe
+
+仓库内的 GitHub Actions 工作流 `build-exe.yml` 会在 Windows runner 上编译
+`nieche.dll`、打包三种形态并上传到 release。手动打包：
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --windowed --add-binary "nieche.dll;." nieche_win.py
+```
+
+打包后必须关闭 Control Flow Guard 并加大栈，否则 JIT 执行时进程会以
+`0xC0000409` 直接终止，且没有任何 Python 异常：
+
+```bat
+editbin /STACK:8388608 /GUARD:NO dist\NiecheEmu.exe
+```
+
+用 `NiecheEmu.exe --uctest` 验证：只加载 DLL 不足以覆盖该问题，需要真正执行到 JIT。
 
 ## 帧率
 
-画面下方的「帧率」是**游戏速度**，不只是画面流畅度：模块的动画和计时
-都是按帧推进的，跑多快游戏就多快。默认 30，可以**直接输入任意值**
-（1–240，回车生效），旁边显示实测帧率。真机上这些游戏大概只有 10–15 fps。
-
-## 打包成单文件 exe
-
-仓库里的 GitHub Actions 工作流会在 Windows runner 上打好并传到 release，
-包括在 runner 上现编 `nieche.dll`。本地打的话：
-
-```
-pip install pyinstaller
-pyinstaller --onefile --noconsole --add-binary "nieche.dll;." nieche_win.py
-```
-
-打出来的 exe **必须关掉 Control Flow Guard**（`editbin /GUARD:NO`），
-否则 unicorn 的 JIT 一跑整个进程会无声消失：退出码 0xC0000409，
-没有任何异常也没有日志。`nieche_win.py --uctest` 就是用来验这件事的，
-它会让核心真跑几条 ARM 指令——**只加载 DLL 是测不出来的**。
+模块的动画与计时按帧推进，帧率直接决定游戏快慢。原机运行这些模块约
+10–15 fps。画面下方可直接输入任意帧率（1–240，回车生效），旁边显示实测值。
 
 ## 说明
 
-本仓库只有代码。游戏数据不在这里，也不会提供。
+本仓库只包含代码。游戏数据不在此处，也不提供。
