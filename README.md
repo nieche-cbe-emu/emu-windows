@@ -15,6 +15,12 @@ python nieche_win.py
 需要 emu-core-rs 的 `python/nieche.py` 和构建好的 `nieche.dll`
 放在同级或上一级目录。
 
+## 帧率
+
+画面下方的「帧率」是**游戏速度**，不只是画面流畅度：模块的动画和计时
+都是按帧推进的，跑多快游戏就多快。默认 30，可以**直接输入任意值**
+（1–240，回车生效），旁边显示实测帧率。真机上这些游戏大概只有 10–15 fps。
+
 ## 打包成单文件 exe
 
 仓库里的 GitHub Actions 工作流会在 Windows runner 上打好并传到 release，
