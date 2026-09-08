@@ -6,7 +6,7 @@ on:
       tag:
         description: 上传到哪个 release tag
         required: false
-        default: v0.1.0
+        default: v0.2.0
   push:
     tags: ['v*']
 
@@ -14,18 +14,7 @@ jobs:
   build:
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x64
-            runner: windows-latest
-          - arch: arm64
-            runner: windows-11-arm
-    runs-on: ${{ matrix.runner }}
-    # arm64 卡在上游：unicorn 在 Windows/ARM64 上的构建还不成熟。
-    # 它失败不该拖垮 x64 的产出。
-    continue-on-error: ${{ matrix.arch == 'arm64' }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -37,42 +26,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          architecture: ${{ matrix.arch }}
+          architecture: x64
 
-      # PyPI 上没有 win_arm64 的 unicorn / capstone 轮子，pip 会转去源码编译，
-      # 而裸的 runner 上 cmake 找不到 MSVC。先把编译环境准备好。
-      - name: setup msvc (arm64)
-        if: matrix.arch == 'arm64'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: arm64
-
-      - name: install deps (x64)
-        if: matrix.arch == 'x64'
+      - name: install deps
         run: pip install unicorn capstone pyinstaller
 
-      # win_arm64 没有现成轮子，而 unicorn 的 setup.py 把生成器写死成 -A x64，
-      # 从源码装也不行。所以：先取 x64 轮子拿到**纯 Python 的 ctypes 绑定**，
-      # 再自己用 cmake 编 ARM64 的 DLL 覆盖进去。两个绑定都只靠 ctypes 加载
-      # 动态库，换掉 DLL 就等于换了架构。
-      - name: install deps (arm64)
-        if: matrix.arch == 'arm64'
+      # Rust 核心。windows runner 自带 Rust，MSVC 目标直接就能编——
+      # 这是 Windows 端唯一能拿到 Rust 核心的路子，macOS 上既没有 mingw
+      # 也打不出 Windows 的 exe。
+      - name: build rust core
         shell: bash
         run: |
-          pip install pyinstaller
-          pip install --only-binary=:all: --platform win_amd64               --python-version 311 --no-deps --target pylibs unicorn capstone
-
-          git clone --depth 1 -b 5.0.3 https://github.com/capstone-engine/capstone.git cs
-          cmake -S cs -B cs/b -A ARM64 -DCMAKE_BUILD_TYPE=Release                 -DBUILD_SHARED_LIBS=ON -DCAPSTONE_BUILD_CSTOOL=OFF                 -DCAPSTONE_ARCHITECTURE_DEFAULT=OFF -DCAPSTONE_ARM_SUPPORT=ON
-          cmake --build cs/b --config Release
-          cp cs/b/Release/capstone.dll pylibs/capstone/lib/capstone.dll
-
-          git clone --depth 1 -b 2.1.3 https://github.com/unicorn-engine/unicorn.git uc
-          cmake -S uc -B uc/b -A ARM64 -DCMAKE_BUILD_TYPE=Release                 -DBUILD_SHARED_LIBS=ON -DUNICORN_ARCH=arm -DUNICORN_BUILD_TESTS=OFF
-          cmake --build uc/b --config Release
-          cp uc/b/Release/unicorn.dll pylibs/unicorn/lib/unicorn.dll
-
-          python -c "import sys; sys.path.insert(0,'pylibs'); import unicorn, capstone; print('绑定可加载')"
+          cd core/rust
+          cargo build --release -p emuffi --lib
+          cd ../..
+          cp core/rust/target/release/nieche.dll .
+          ls -l nieche.dll
 
       - name: assemble
         shell: bash
@@ -80,20 +49,18 @@ jobs:
 
       - name: build
         shell: bash
-        env:
-          PYTHONPATH: pylibs
         run: |
           EXTRA=""
-          if [ "${{ matrix.arch }}" = "arm64" ]; then EXTRA="--paths pylibs"; fi
           # 只把字库当 data 带上。整个 emu 目录也塞 data 的话，
           # 解出来的源码目录会和 PyInstaller 冻结的同名包重叠。
           DATA="--add-data emu/font12.cbef;emu --add-data logo.png;."
+          DATA="$DATA --add-binary nieche.dll;."
           COLLECT="--collect-all unicorn --collect-all capstone"
 
-          pyinstaller --onefile --windowed --name NiecheEmu-${{ matrix.arch }} \
+          pyinstaller --onefile --windowed --name NiecheEmu-x64 \
             $DATA $COLLECT $EXTRA nieche_win.py
           # 带控制台的诊断版：闪退时能直接看到 traceback
-          pyinstaller --onefile --console --name NiecheEmu-${{ matrix.arch }}-debug \
+          pyinstaller --onefile --console --name NiecheEmu-x64-debug \
             $DATA $COLLECT $EXTRA nieche_win.py
           # 目录版：不做临时解包，原生库直接躺在磁盘上。onefile 的解包
           # 会改变 DLL 的加载路径与搜索顺序，ctypes 加载的原生库最容易在这里翻车。
@@ -112,7 +79,6 @@ jobs:
       #   退出码 0xC0000409 (STATUS_STACK_BUFFER_OVERRUN)，没有任何 Python 异常。
       #   同样的自检在不冻结的 Python 下是通过的，正好对上。
       - name: 关掉 CFG 并加大栈
-        if: matrix.arch == 'x64'
         shell: cmd
         run: |
           for /f "usebackq delims=" %%i in (`"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -find **\editbin.exe`) do set EDITBIN=%%i
@@ -124,14 +90,14 @@ jobs:
       - name: 打包目录版
         shell: bash
         run: |
-          cd dist && 7z a -tzip "NiecheEmu-${{ matrix.arch }}-folder.zip" NiecheEmu && ls -l
+          cd dist && 7z a -tzip "NiecheEmu-x64-folder.zip" NiecheEmu && ls -l
 
       - name: smoke test
         shell: bash
         run: |
-          test -f "dist/NiecheEmu-${{ matrix.arch }}.exe"
-          test -f "dist/NiecheEmu-${{ matrix.arch }}-debug.exe"
-          test -f "dist/NiecheEmu-${{ matrix.arch }}-folder.zip"
+          test -f "dist/NiecheEmu-x64.exe"
+          test -f "dist/NiecheEmu-x64-debug.exe"
+          test -f "dist/NiecheEmu-x64-folder.zip"
 
       # 真正在 Windows 上跑一遍原生层自检。用户报的闪退就崩在 Machine 构造的
       # 第一个 mem_map 上，那之前不需要任何 .cbe，所以这里能完整复现。
@@ -140,21 +106,23 @@ jobs:
       - name: 自检 A - 不冻结（对照组）
         continue-on-error: true
         shell: cmd
-        env:
-          PYTHONPATH: pylibs
         run: python nieche_win.py --uctest
 
       - name: 自检 B - 单文件版
         shell: cmd
-        run: dist\NiecheEmu-${{ matrix.arch }}-debug.exe --uctest
+        run: dist\NiecheEmu-x64-debug.exe --uctest
 
       - name: 自检 C - 目录版
         shell: cmd
         run: dist\NiecheEmu\NiecheEmu.exe --uctest
 
+      - name: 自检 D - 确认用上了 Rust 核心
+        shell: cmd
+        run: dist\NiecheEmu-x64-debug.exe --coretest
+
       - uses: actions/upload-artifact@v4
         with:
-          name: NiecheEmu-${{ matrix.arch }}
+          name: NiecheEmu-x64
           path: |
             dist/*.exe
             dist/*.zip
