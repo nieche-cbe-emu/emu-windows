@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(NiecheEmu LANGUAGES CXX)
+project(NiecheEmu LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,4 +32,11 @@ if (MSVC)
     # 而模拟器就跑在界面线程上——溢出的表现是进程直接消失，
     # 没有异常、没有对话框、没有日志。Python 那版也栽在同一处。
     target_link_options(NiecheEmu PRIVATE "/STACK:8388608")
+endif()
+
+# 排查用的最小探针：不带 Qt，只 LoadLibrary + nieche_selftest。
+# 用来把"闪退是 Qt 引起的"和"是链接设置/进程本身引起的"分开。
+add_executable(probe src/probe.c)
+if (MSVC)
+    target_link_options(probe PRIVATE "/STACK:8388608")
 endif()
