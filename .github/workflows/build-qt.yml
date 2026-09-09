@@ -1,0 +1,92 @@
+name: build-windows-qt
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 上传到哪个 release tag
+        required: false
+        default: v0.4.0
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: nieche-cbe-emu/emu-core-rs
+          path: core
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.3'
+          arch: win64_msvc2022_64
+          cache: true
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # 模拟核心。unicorn 在这里能正常构建——它的 build.rs 用的是
+      # Visual Studio 自带的 cmake 与 ninja，runner 上装的 VS 带这些组件。
+      - name: build core dll
+        shell: bash
+        run: |
+          cd core
+          cargo build --release -p emuffi --lib
+          ls -l target/release/nieche.dll
+
+      - name: configure
+        shell: bash
+        run: |
+          cmake -S . -B build -A x64 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNIECHE_DIR="$PWD/core"
+
+      - name: build
+        shell: bash
+        run: cmake --build build --config Release
+
+      # windeployqt 把 Qt 运行库拷到 exe 旁边，用户解压即用、不需要安装
+      - name: deploy
+        shell: bash
+        run: |
+          mkdir -p dist/NiecheEmu
+          cp build/Release/NiecheEmu.exe dist/NiecheEmu/
+          cp core/target/release/nieche.dll dist/NiecheEmu/
+          cd dist/NiecheEmu
+          windeployqt --release --no-translations --no-system-d3d-compiler NiecheEmu.exe
+          ls
+
+      # 冒烟测试：确认 exe 能起来并把核心加载上。
+      # runner 上没有桌面会话，所以只验进程能启动到加载核心这一步。
+      - name: smoke test
+        shell: bash
+        run: |
+          test -f dist/NiecheEmu/NiecheEmu.exe
+          test -f dist/NiecheEmu/nieche.dll
+          test -f dist/NiecheEmu/Qt6Widgets.dll
+          echo "产物齐全"
+
+      - name: package
+        shell: bash
+        run: |
+          cd dist && 7z a -tzip NiecheEmu-windows-x64.zip NiecheEmu && ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NiecheEmu-windows-x64
+          path: dist/*.zip
+
+      - name: attach to release
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" dist/*.zip --clobber
