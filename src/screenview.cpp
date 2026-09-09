@@ -10,12 +10,11 @@ ScreenView::ScreenView(QWidget *parent) : QWidget(parent)
     setAttribute(Qt::WA_OpaquePaintEvent);
 }
 
-void ScreenView::setFrame(const QByteArray &px, int w, int h)
+void ScreenView::setImage(const QImage &frame)
 {
-    if (w <= 0 || h <= 0 || px.size() < w * h * 2)
+    if (frame.isNull())
         return;
-
-    img = QImage((const uchar *)px.constData(), w, h, w * 2, QImage::Format_RGB16).copy();
+    img = frame;
     update();
 }
 

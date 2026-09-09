@@ -2,7 +2,7 @@
 #pragma once
 #include <QMainWindow>
 
-#include "core.h"
+#include "emuthread.h"
 
 class QCheckBox;
 class QComboBox;
@@ -35,12 +35,10 @@ private:
     void refreshLibrary();
     void startModule(const QString &path);
     void stopModule();
-    void tick();
     void askFps();
     void applyKeys();
 
-    Core core;
-    QTimer *timer = nullptr;
+    EmuThread *emu = nullptr;
 
     ScreenView *screen = nullptr;
     Keypad *pad = nullptr;

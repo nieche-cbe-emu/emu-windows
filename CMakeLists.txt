@@ -17,6 +17,8 @@ qt_add_executable(NiecheEmu WIN32
     src/mainwindow.h
     src/core.cpp
     src/core.h
+    src/emuthread.cpp
+    src/emuthread.h
     src/screenview.cpp
     src/screenview.h
     src/keypad.cpp

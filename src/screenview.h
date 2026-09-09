@@ -8,7 +8,7 @@ class ScreenView : public QWidget {
 public:
     explicit ScreenView(QWidget *parent = nullptr);
 
-    void setFrame(const QByteArray &rgb565, int w, int h);
+    void setImage(const QImage &img);
     void setScale(int s);
     void setRotate(int deg);
     void setSmooth(bool on);

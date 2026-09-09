@@ -24,7 +24,6 @@
 #include <QFile>
 #include <QStandardPaths>
 #include <QTextStream>
-#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -91,19 +90,28 @@ MainWindow::MainWindow(const QString &autoStart)
     buildUi();
 
     traceImpl(QStringLiteral("=== 启动 ==="));
-    core.setTracer(&MainWindow::trace);
-    if (!core.load()) {
-        traceImpl(QStringLiteral("核心加载失败: %1").arg(core.errorString()));
-        log->appendPlainText(core.errorString());
-        status->setText(core.errorString());
-    } else {
-        log->appendPlainText(QStringLiteral("核心已加载（ABI %1）").arg(core.abiVersion()));
-    }
+
+    emu = new EmuThread(this);
+    connect(emu, &EmuThread::frameReady, this, [this](const QImage &img) {
+        screen->setImage(img);
+    });
+    connect(emu, &EmuThread::statusChanged, this,
+            [this](const QString &t, int w, int h) {
+                status->setText(h > 0 ? QStringLiteral("%1  %2×%3").arg(t).arg(w).arg(h) : t);
+            });
+    connect(emu, &EmuThread::fpsMeasured, this, [this](double f) {
+        fpsReal->setText(QStringLiteral("实测 %1").arg(f, 0, 'f', 1));
+    });
+    connect(emu, &EmuThread::logLine, this,
+            [this](const QString &l) { log->appendPlainText(l); });
+    connect(emu, &EmuThread::moduleExited, this, [this] {
+        status->setText(QStringLiteral("模块已退出"));
+    });
+    emu->setFps(fpsTarget);
+    emu->start();
+
     refreshLibrary();
 
-    timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &MainWindow::tick);
-    mark = QDateTime::currentMSecsSinceEpoch();
     resize(1100, 760);
 
     if (!autoStart.isEmpty())
@@ -140,7 +148,7 @@ void MainWindow::buildUi()
     auto *midBox = new QVBoxLayout;
     screen = new ScreenView(central);
     connect(screen, &ScreenView::touched, this, [this](int x, int y, int s) {
-        core.setTouch(x, y, s);
+        emu->pushTouch(x, y, s);
     });
     midBox->addWidget(screen, 1);
     status = new QLabel(QStringLiteral("未加载模块"), central);
@@ -215,7 +223,10 @@ void MainWindow::buildUi()
     pad = new Keypad(central);
     connect(pad, &Keypad::pressed, this, [this](unsigned m) { padMask |= m; applyKeys(); });
     connect(pad, &Keypad::released, this, [this](unsigned m) { padMask &= ~m; applyKeys(); });
-    connect(pad, &Keypad::softKey, this, [this](int s) { core.softKey(s); });
+    connect(pad, &Keypad::softKey, this, [this](int s) {
+
+        emu->pushTouch(-1, -1, 10 + s);
+    });
     rightBox->addWidget(pad);
 
     rightBox->addWidget(new QLabel(QStringLiteral("模块日志")));
@@ -254,73 +265,17 @@ void MainWindow::refreshLibrary()
 void MainWindow::startModule(const QString &path)
 {
     traceImpl(QStringLiteral("startModule %1").arg(path));
-    stopModule();
-    if (!core.open(path)) {
-        traceImpl(QStringLiteral("open/boot 失败: %1").arg(core.errorString()));
-        status->setText(core.errorString());
-        log->appendPlainText(core.errorString());
-        return;
-    }
-    traceImpl(QStringLiteral("open/boot 成功，尺寸 %1x%2")
-              .arg(core.size().width()).arg(core.size().height()));
-    title = QFileInfo(path).fileName();
-    frames = 0;
-    mark = QDateTime::currentMSecsSinceEpoch();
-    timer->start(qMax(1, 1000 / qMax(1, fpsTarget)));
+    emu->requestStart(path);
 }
 
 void MainWindow::stopModule()
 {
-    if (timer)
-        timer->stop();
-    core.close();
+    emu->requestStop();
     kbMask = padMask = 0;
-    status->setText(QStringLiteral("已停止"));
+    emu->setKeys(0);
 }
 
-void MainWindow::applyKeys() { core.setKeys(kbMask | padMask); }
-
-void MainWindow::tick()
-{
-    if (!core.booted())
-        return;
-    static int nth = 0;
-    const bool loud = nth < 5 || nth % 30 == 0;
-    ++nth;
-    if (loud)
-        traceImpl(QStringLiteral("tick %1 进入").arg(nth));
-    applyKeys();
-    const QByteArray px = core.step();
-    if (loud)
-        traceImpl(QStringLiteral("tick %1 step 完成 %2 字节").arg(nth).arg(px.size()));
-    const QSize sz = core.size();
-    screen->setFrame(px, sz.width(), sz.height());
-    if (loud)
-        traceImpl(QStringLiteral("tick %1 setFrame 完成").arg(nth));
-
-    const QStringList evs = core.takeEvents();
-    if (loud)
-        traceImpl(QStringLiteral("tick %1 事件 %2 条").arg(nth).arg(evs.size()));
-    for (const QString &e : evs) {
-        if (e.contains(QStringLiteral("\"exit\""))) {
-            stopModule();
-            return;
-        }
-        if (e.contains(QStringLiteral("\"log\"")))
-            log->appendPlainText(e);
-    }
-
-    ++frames;
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - mark >= 1000) {
-        const double real = frames * 1000.0 / (now - mark);
-        fpsReal->setText(QStringLiteral("实测 %1").arg(real, 0, 'f', 1));
-        status->setText(QStringLiteral("%1  %2×%3")
-                            .arg(title).arg(sz.width()).arg(sz.height()));
-        frames = 0;
-        mark = now;
-    }
-}
+void MainWindow::applyKeys() { emu->setKeys(kbMask | padMask); }
 
 void MainWindow::askFps()
 {
@@ -337,8 +292,7 @@ void MainWindow::askFps()
     fpsBtn->setText(QStringLiteral("%1 fps").arg(fpsTarget));
     QSettings(QStringLiteral("nieche"), QStringLiteral("emu"))
         .setValue(QStringLiteral("fps"), fpsTarget);
-    if (timer->isActive())
-        timer->start(qMax(1, 1000 / qMax(1, fpsTarget)));
+    emu->setFps(fpsTarget);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *e)
