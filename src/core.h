@@ -14,6 +14,8 @@ public:
     QString errorString() const { return err; }
     uint32_t abiVersion() const;
 
+    bool selftest() const;
+
     bool open(const QString &path);
 
     void setTracer(void (*fn)(const QString &)) { tracer = fn; }

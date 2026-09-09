@@ -6,6 +6,7 @@
 
 extern "C" {
 typedef uint32_t (*fn_abi)();
+typedef int32_t (*fn_selftest)();
 typedef void *(*fn_open)(const char *);
 typedef void (*fn_close)(void *);
 typedef int32_t (*fn_boot)(void *);
@@ -21,6 +22,7 @@ typedef size_t (*fn_events)(void *, uint8_t *, size_t);
 
 namespace {
 fn_abi p_abi = nullptr;
+fn_selftest p_selftest = nullptr;
 fn_open p_open = nullptr;
 fn_close p_close = nullptr;
 fn_boot p_boot = nullptr;
@@ -57,6 +59,7 @@ bool Core::load()
     }
     auto R = [&](const char *n) { return qlib.resolve(n); };
     p_abi = (fn_abi)R("nieche_abi_version");
+    p_selftest = (fn_selftest)R("nieche_selftest");
     p_open = (fn_open)R("nieche_open");
     p_close = (fn_close)R("nieche_close");
     p_boot = (fn_boot)R("nieche_boot");
@@ -81,6 +84,8 @@ bool Core::load()
 }
 
 uint32_t Core::abiVersion() const { return p_abi ? p_abi() : 0; }
+
+bool Core::selftest() const { return p_selftest && p_selftest() == 1; }
 
 bool Core::open(const QString &path)
 {

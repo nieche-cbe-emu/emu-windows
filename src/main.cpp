@@ -41,6 +41,9 @@ static int selftest(const char *modulePath)
         return 2;
     }
     say(QStringLiteral("ABI %1").arg(c.abiVersion()));
+
+    say(QStringLiteral("selftest(JIT) 开始"));
+    say(QStringLiteral("selftest(JIT) = %1").arg(c.selftest() ? 1 : 0));
     say(QStringLiteral("open"));
     if (!c.open(QString::fromLocal8Bit(modulePath))) {
         say(QStringLiteral("open/boot 失败: ") + c.errorString());
