@@ -2,6 +2,7 @@
 #include "mainwindow.h"
 
 #include <QApplication>
+#include <QIcon>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -72,6 +73,7 @@ int main(int argc, char **argv)
 
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("NiecheEmu"));
+    app.setWindowIcon(QIcon(QStringLiteral(":/app.ico")));
     const QString start = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();
     MainWindow w(start);
     w.show();
