@@ -68,6 +68,15 @@ jobs:
 
       # 冒烟测试：确认 exe 能起来并把核心加载上。
       # runner 上没有桌面会话，所以只验进程能启动到加载核心这一步。
+      # 在**原生 x64** 上跑一次最小探针：LoadLibrary + nieche_selftest。
+      # ARM 虚拟机里 x64 模拟下这一步会崩，需要确认真实 Windows 上是否正常。
+      - name: probe（原生 x64 上验 JIT）
+        shell: pwsh
+        run: |
+          cd dist/NiecheEmu
+          ./probe.exe
+          if ($LASTEXITCODE -ne 0) { throw "probe 失败，退出码 $LASTEXITCODE" }
+
       - name: smoke test
         shell: bash
         run: |
