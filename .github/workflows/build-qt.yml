@@ -35,34 +35,35 @@ jobs:
 
       # 模拟核心。unicorn 在这里能正常构建——它的 build.rs 用的是
       # Visual Studio 自带的 cmake 与 ninja，runner 上装的 VS 带这些组件。
+      # **不要用 bash**：Git 自带的 /usr/bin/link 会挡住 MSVC 的 link.exe，
+      # 报的错是 "extra operand ... rcgu.o"，看着像 Rust 的问题，其实是链接器认错了。
       - name: build core dll
-        shell: bash
+        shell: pwsh
         run: |
           cd core
           cargo build --release -p emuffi --lib
-          ls -l target/release/nieche.dll
+          if (-not (Test-Path target/release/nieche.dll)) { throw "nieche.dll 没生成" }
+          Get-Item target/release/nieche.dll | Select-Object Length, FullName
 
       - name: configure
-        shell: bash
+        shell: pwsh
         run: |
-          cmake -S . -B build -A x64 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DNIECHE_DIR="$PWD/core"
+          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DNIECHE_DIR="$PWD/core"
 
       - name: build
-        shell: bash
+        shell: pwsh
         run: cmake --build build --config Release
 
       # windeployqt 把 Qt 运行库拷到 exe 旁边，用户解压即用、不需要安装
       - name: deploy
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p dist/NiecheEmu
-          cp build/Release/NiecheEmu.exe dist/NiecheEmu/
-          cp core/target/release/nieche.dll dist/NiecheEmu/
+          New-Item -ItemType Directory -Force -Path dist/NiecheEmu | Out-Null
+          Copy-Item build/Release/NiecheEmu.exe dist/NiecheEmu/
+          Copy-Item core/target/release/nieche.dll dist/NiecheEmu/
           cd dist/NiecheEmu
           windeployqt --release --no-translations --no-system-d3d-compiler NiecheEmu.exe
-          ls
+          Get-ChildItem | Select-Object -ExpandProperty Name
 
       # 冒烟测试：确认 exe 能起来并把核心加载上。
       # runner 上没有桌面会话，所以只验进程能启动到加载核心这一步。
