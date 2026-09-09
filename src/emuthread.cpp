@@ -4,6 +4,8 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 
+#include "mainwindow.h"
+
 EmuThread::EmuThread(QObject *parent) : QThread(parent) {}
 
 EmuThread::~EmuThread()
@@ -46,6 +48,8 @@ void EmuThread::setFps(int v)
 
 void EmuThread::run()
 {
+    core.setTracer(&MainWindow::trace);
+    MainWindow::trace(QStringLiteral("[emu] 线程启动"));
     if (!core.load()) {
         emit logLine(core.errorString());
         return;
@@ -83,6 +87,7 @@ void EmuThread::run()
             emit statusChanged(QStringLiteral("已停止"), 0, 0);
         }
         if (!toStart.isEmpty()) {
+            MainWindow::trace(QStringLiteral("[emu] 准备打开 %1").arg(toStart));
             if (core.open(toStart)) {
                 title = QFileInfo(toStart).fileName();
                 const QSize s = core.size();

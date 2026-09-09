@@ -1,3 +1,4 @@
+#include "core.h"
 #include "mainwindow.h"
 
 #include <QApplication>
@@ -30,11 +31,42 @@ static LONG WINAPI crashFilter(EXCEPTION_POINTERS *ep)
 }
 #endif
 
+static int selftest(const char *modulePath)
+{
+    auto say = [](const QString &m) { MainWindow::trace(QStringLiteral("[selftest] ") + m); };
+    Core c;
+    say(QStringLiteral("load"));
+    if (!c.load()) {
+        say(QStringLiteral("load 失败: ") + c.errorString());
+        return 2;
+    }
+    say(QStringLiteral("ABI %1").arg(c.abiVersion()));
+    say(QStringLiteral("open"));
+    if (!c.open(QString::fromLocal8Bit(modulePath))) {
+        say(QStringLiteral("open/boot 失败: ") + c.errorString());
+        return 3;
+    }
+    say(QStringLiteral("boot 成功 %1x%2").arg(c.size().width()).arg(c.size().height()));
+    for (int i = 0; i < 60; ++i) {
+        const QByteArray px = c.step();
+        c.takeEvents();
+        if (i < 3 || i == 59)
+            say(QStringLiteral("step %1 -> %2 字节").arg(i).arg(px.size()));
+    }
+    say(QStringLiteral("60 帧完成"));
+    c.close();
+    say(QStringLiteral("closed"));
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
 #ifdef Q_OS_WIN
     SetUnhandledExceptionFilter(crashFilter);
 #endif
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QLatin1String("--selftest"))
+        return selftest(argv[2]);
+
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("NiecheEmu"));
     const QString start = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();
