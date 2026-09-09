@@ -21,11 +21,32 @@
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
+#include <QFile>
 #include <QStandardPaths>
+#include <QTextStream>
 #include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
+
+void trace(const QString &msg)
+{
+    static QFile f;
+    if (!f.isOpen()) {
+        QString r = qEnvironmentVariable("NIECHE_HOME");
+        if (r.isEmpty())
+            r = QDir::homePath() + QStringLiteral("/.nieche-emu");
+        QDir().mkpath(r);
+        f.setFileName(r + QStringLiteral("/emu.log"));
+        f.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
+    }
+    if (f.isOpen()) {
+        QTextStream ts(&f);
+        ts << QDateTime::currentDateTime().toString(Qt::ISODateWithMs) << "  " << msg << "\n";
+        ts.flush();
+        f.flush();
+    }
+}
 
 unsigned keyToMask(int k)
 {
@@ -67,7 +88,9 @@ MainWindow::MainWindow(const QString &autoStart)
     setWindowTitle(QStringLiteral("尼彩 CBE 模拟器"));
     buildUi();
 
+    trace(QStringLiteral("=== 启动 ==="));
     if (!core.load()) {
+        trace(QStringLiteral("核心加载失败: %1").arg(core.errorString()));
         log->appendPlainText(core.errorString());
         status->setText(core.errorString());
     } else {
@@ -227,12 +250,16 @@ void MainWindow::refreshLibrary()
 
 void MainWindow::startModule(const QString &path)
 {
+    trace(QStringLiteral("startModule %1").arg(path));
     stopModule();
     if (!core.open(path)) {
+        trace(QStringLiteral("open/boot 失败: %1").arg(core.errorString()));
         status->setText(core.errorString());
         log->appendPlainText(core.errorString());
         return;
     }
+    trace(QStringLiteral("open/boot 成功，尺寸 %1x%2")
+              .arg(core.size().width()).arg(core.size().height()));
     title = QFileInfo(path).fileName();
     frames = 0;
     mark = QDateTime::currentMSecsSinceEpoch();
@@ -254,12 +281,24 @@ void MainWindow::tick()
 {
     if (!core.booted())
         return;
+    static int nth = 0;
+    const bool loud = nth < 5 || nth % 30 == 0;
+    ++nth;
+    if (loud)
+        trace(QStringLiteral("tick %1 进入").arg(nth));
     applyKeys();
     const QByteArray px = core.step();
+    if (loud)
+        trace(QStringLiteral("tick %1 step 完成 %2 字节").arg(nth).arg(px.size()));
     const QSize sz = core.size();
     screen->setFrame(px, sz.width(), sz.height());
+    if (loud)
+        trace(QStringLiteral("tick %1 setFrame 完成").arg(nth));
 
-    for (const QString &e : core.takeEvents()) {
+    const QStringList evs = core.takeEvents();
+    if (loud)
+        trace(QStringLiteral("tick %1 事件 %2 条").arg(nth).arg(evs.size()));
+    for (const QString &e : evs) {
         if (e.contains(QStringLiteral("\"exit\""))) {
             stopModule();
             return;
