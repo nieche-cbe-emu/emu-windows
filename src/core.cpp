@@ -114,11 +114,16 @@ QByteArray Core::step()
     if (!sess)
         return {};
 
-    const size_t need = p_step(sess, nullptr, 0);
-    if (buf.size() < (int)need)
-        buf.resize((int)need);
-    const size_t n = p_step(sess, (uint8_t *)buf.data(), buf.size());
-    return QByteArray::fromRawData(buf.constData(), (int)n);
+    uint32_t w = 0, h = 0;
+    p_size(sess, &w, &h);
+    const int need = int(w) * int(h) * 2;
+    if (need <= 0)
+        return {};
+    if (buf.size() < need)
+        buf.resize(need);
+    const size_t n = p_step(sess, (uint8_t *)buf.data(), size_t(buf.size()));
+
+    return QByteArray::fromRawData(buf.constData(), qMin(int(n), buf.size()));
 }
 
 void Core::setKeys(uint32_t m)
