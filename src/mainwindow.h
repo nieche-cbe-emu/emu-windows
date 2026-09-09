@@ -19,7 +19,8 @@ class ScreenView;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    MainWindow();
+
+    explicit MainWindow(const QString &autoStart = QString());
 
 protected:
     void keyPressEvent(QKeyEvent *) override;

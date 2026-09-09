@@ -62,7 +62,7 @@ QString dataRoot()
 }
 }
 
-MainWindow::MainWindow()
+MainWindow::MainWindow(const QString &autoStart)
 {
     setWindowTitle(QStringLiteral("尼彩 CBE 模拟器"));
     buildUi();
@@ -79,6 +79,10 @@ MainWindow::MainWindow()
     connect(timer, &QTimer::timeout, this, &MainWindow::tick);
     mark = QDateTime::currentMSecsSinceEpoch();
     resize(1100, 760);
+
+    if (!autoStart.isEmpty())
+        QMetaObject::invokeMethod(
+            this, [this, autoStart] { startModule(autoStart); }, Qt::QueuedConnection);
 }
 
 void MainWindow::buildUi()
@@ -91,7 +95,7 @@ void MainWindow::buildUi()
     libBox->addWidget(new QLabel(QStringLiteral("游戏库")));
     library = new QListWidget(central);
     library->setMinimumWidth(200);
-    connect(library, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *it) {
+    connect(library, &QListWidget::itemActivated, this, [this](QListWidgetItem *it) {
         startModule(it->data(Qt::UserRole).toString());
     });
     libBox->addWidget(library, 1);

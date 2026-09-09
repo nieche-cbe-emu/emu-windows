@@ -6,9 +6,9 @@ int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("NiecheEmu"));
-    MainWindow w;
+
+    const QString start = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();
+    MainWindow w(start);
     w.show();
-    if (argc > 1)
-        QMetaObject::invokeMethod(&w, "show", Qt::QueuedConnection);
     return app.exec();
 }
