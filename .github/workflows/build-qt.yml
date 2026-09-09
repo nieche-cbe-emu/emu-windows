@@ -61,6 +61,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist/NiecheEmu | Out-Null
           Copy-Item build/Release/NiecheEmu.exe dist/NiecheEmu/
           Copy-Item core/target/release/nieche.dll dist/NiecheEmu/
+          if (Test-Path build/Release/probe.exe) { Copy-Item build/Release/probe.exe dist/NiecheEmu/ }
           cd dist/NiecheEmu
           windeployqt --release --no-translations --no-system-d3d-compiler NiecheEmu.exe
           Get-ChildItem | Select-Object -ExpandProperty Name
