@@ -15,6 +15,8 @@ public:
     uint32_t abiVersion() const;
 
     bool open(const QString &path);
+
+    void setTracer(void (*fn)(const QString &)) { tracer = fn; }
     void close();
     bool booted() const { return sess != nullptr; }
 
@@ -32,4 +34,5 @@ private:
     void *sess = nullptr;
     QString err;
     QByteArray buf;
+    void (*tracer)(const QString &) = nullptr;
 };

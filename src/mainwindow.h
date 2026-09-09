@@ -26,6 +26,10 @@ protected:
     void keyPressEvent(QKeyEvent *) override;
     void keyReleaseEvent(QKeyEvent *) override;
 
+public:
+
+    static void trace(const QString &msg);
+
 private:
     void buildUi();
     void refreshLibrary();

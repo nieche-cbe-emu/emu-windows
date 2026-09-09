@@ -84,14 +84,20 @@ uint32_t Core::abiVersion() const { return p_abi ? p_abi() : 0; }
 
 bool Core::open(const QString &path)
 {
+    auto T = [this](const QString &m) { if (tracer) tracer(m); };
     close();
     const QByteArray p = path.toUtf8();
+    T(QStringLiteral("core.open: 调用 nieche_open"));
     sess = p_open(p.constData());
+    T(QStringLiteral("core.open: nieche_open 返回 %1").arg(sess ? 1 : 0));
     if (!sess) {
         err = QStringLiteral("打不开模块");
         return false;
     }
-    if (p_boot(sess) != 1) {
+    T(QStringLiteral("core.open: 调用 nieche_boot"));
+    const int r = p_boot(sess);
+    T(QStringLiteral("core.open: nieche_boot 返回 %1").arg(r));
+    if (r != 1) {
         err = QStringLiteral("引导失败");
         close();
         return false;
