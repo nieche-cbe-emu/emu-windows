@@ -186,11 +186,10 @@ void MainWindow::buildUi()
     form->addRow(QStringLiteral("旋转"), rotateBox);
 
     upscaleBox = new QComboBox(central);
-
-    upscaleBox->addItems({QStringLiteral("锐利"), QStringLiteral("最近邻"), QStringLiteral("平滑")});
+    upscaleBox->addItems({QStringLiteral("最近邻"), QStringLiteral("平滑")});
     upscaleBox->setFocusPolicy(Qt::NoFocus);
     connect(upscaleBox, &QComboBox::currentIndexChanged, this,
-            [this](int i) { screen->setMode(ScreenView::Mode(i)); });
+            [this](int i) { screen->setSmooth(i == 1); });
     form->addRow(QStringLiteral("放大"), upscaleBox);
 
     auto *soundRow = new QHBoxLayout;
