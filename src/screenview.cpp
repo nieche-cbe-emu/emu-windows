@@ -2,6 +2,7 @@
 
 #include <QMouseEvent>
 #include <QPainter>
+#include <QtMath>
 
 ScreenView::ScreenView(QWidget *parent) : QWidget(parent)
 {
@@ -20,7 +21,7 @@ void ScreenView::setImage(const QImage &frame)
 
 void ScreenView::setScale(int s) { scale = s; updateGeometry(); update(); }
 void ScreenView::setRotate(int d) { rotate = d; updateGeometry(); update(); }
-void ScreenView::setSmooth(bool on) { smooth = on; update(); }
+void ScreenView::setMode(Mode m) { mode = m; updateGeometry(); update(); }
 
 QSize ScreenView::sizeHint() const
 {
@@ -41,10 +42,14 @@ QRect ScreenView::target() const
         s.transpose();
     if (scale > 0) {
         s *= scale;
-    } else {
+    } else if (mode == Pixel) {
 
         const int k = qMax(1, qMin(width() / s.width(), height() / s.height()));
         s *= k;
+    } else {
+
+        const double k = qMax(1.0, qMin(double(width()) / s.width(), double(height()) / s.height()));
+        s = QSize(qFloor(s.width() * k), qFloor(s.height() * k));
     }
     return QRect(QPoint((width() - s.width()) / 2, (height() - s.height()) / 2), s);
 }
@@ -55,14 +60,31 @@ void ScreenView::paintEvent(QPaintEvent *)
     p.fillRect(rect(), palette().window());
     if (img.isNull())
         return;
-    p.setRenderHint(QPainter::SmoothPixmapTransform, smooth);
     const QRect t = target();
     if (rotate) {
         p.translate(t.center());
         p.rotate(rotate);
         p.translate(-t.center());
     }
-    p.drawImage(t, img);
+
+    QRect d = t;
+    if (rotate == 90 || rotate == 270)
+        d = QRect(QPoint(t.center().x() - t.height() / 2, t.center().y() - t.width() / 2),
+                  QSize(t.height(), t.width()));
+    if (mode == Pixel) {
+        p.drawImage(d, img);
+        return;
+    }
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    const double dev = double(d.width()) * devicePixelRatioF() / img.width();
+    const int n = qBound(1, qCeil(dev - 1e-3), 8);
+    if (mode == Smooth || n == 1) {
+        p.drawImage(d, img);
+        return;
+    }
+    pre = img.scaled(img.size() * n, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+    p.drawImage(d, pre);
 }
 
 void ScreenView::emitTouch(const QPoint &pt, int state)

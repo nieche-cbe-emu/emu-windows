@@ -6,12 +6,15 @@
 class ScreenView : public QWidget {
     Q_OBJECT
 public:
+
+    enum Mode { Sharp, Pixel, Smooth };
+
     explicit ScreenView(QWidget *parent = nullptr);
 
     void setImage(const QImage &img);
     void setScale(int s);
     void setRotate(int deg);
-    void setSmooth(bool on);
+    void setMode(Mode m);
     QSize sizeHint() const override;
 
 signals:
@@ -31,5 +34,6 @@ private:
     QImage img;
     int scale = 2;
     int rotate = 0;
-    bool smooth = false;
+    Mode mode = Sharp;
+    QImage pre;
 };
