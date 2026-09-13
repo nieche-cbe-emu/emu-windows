@@ -71,6 +71,11 @@ int main(int argc, char **argv)
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QLatin1String("--selftest"))
         return selftest(argv[2]);
 
+    if (qEnvironmentVariableIsEmpty("NIECHE_HOME")) {
+        const QString root = QDir::homePath() + QStringLiteral("/.nieche-emu");
+        QDir().mkpath(root);
+        qputenv("NIECHE_HOME", QDir::toNativeSeparators(root).toLocal8Bit());
+    }
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("NiecheEmu"));
     app.setWindowIcon(QIcon(QStringLiteral(":/app.ico")));
