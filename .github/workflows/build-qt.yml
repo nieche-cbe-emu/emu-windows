@@ -4,9 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 上传到哪个 release tag
+        # **留空就不上传。** 以前默认值是一个真实的 tag，手动跑一次构建
+        # 就会把那个 release 的附件覆盖掉。
+        description: 上传到哪个 release tag（留空＝只构建、不上传）
         required: false
-        default: v0.4.0
+        default: ''
   push:
     tags: ['v*']
 
@@ -48,11 +50,20 @@ jobs:
       - name: configure
         shell: pwsh
         run: |
-          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DNIECHE_DIR="$PWD/core"
+          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DNIECHE_TESTS=ON -DNIECHE_DIR="$PWD/core"
 
       - name: build
         shell: pwsh
         run: cmake --build build --config Release
+
+      # 按键回归测试（#1：游戏库列表吃掉键盘）。
+      # 用 offscreen 平台插件跑，runner 上没有桌面会话也能建窗口、发按键。
+      - name: keyboard test
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ctest --test-dir build -C Release -V
 
       # windeployqt 把 Qt 运行库拷到 exe 旁边，用户解压即用、不需要安装
       - name: deploy
@@ -96,7 +107,7 @@ jobs:
           path: dist/*.zip
 
       - name: attach to release
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
