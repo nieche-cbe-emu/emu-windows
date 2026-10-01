@@ -59,7 +59,8 @@ unsigned keyToMask(int k)
     case Qt::Key_J: case Qt::Key_Space: case Qt::Key_Return: case Qt::Key_Enter:
         return (1u << 5) | (1u << 14);
     case Qt::Key_K: return 1u << 12;
-    case Qt::Key_L: return 1u << 13;
+
+    case Qt::Key_Escape: return 1u << 13;
     case Qt::Key_U: return 1u << 20;
     case Qt::Key_1: return 1u << 19;
     case Qt::Key_2: return 1u << 18;
@@ -71,6 +72,8 @@ unsigned keyToMask(int k)
     case Qt::Key_8: return 1u << 17;
     case Qt::Key_9: return 1u << 22;
     case Qt::Key_0: return 1u << 24;
+    case Qt::Key_Minus: return 1u << 23;
+    case Qt::Key_Equal: return 1u << 25;
     default: return 0;
     }
 }
@@ -109,7 +112,18 @@ MainWindow::MainWindow(const QString &autoStart)
             [this](const QString &l) { log->appendPlainText(l); });
     connect(emu, &EmuThread::moduleExited, this, [this] {
         status->setText(QStringLiteral("模块已退出"));
+        audio->stop();
     });
+    audio = new AudioOut(this);
+    audio->setEnabled(soundOn->isChecked());
+    audio->setVolume(volume->value());
+    connect(emu, &EmuThread::audioEvent, audio, &AudioOut::handle);
+    connect(audio, &AudioOut::logLine, this,
+            [this](const QString &l) { log->appendPlainText(l); });
+    connect(soundOn, &QCheckBox::toggled, this,
+            [this](bool on) { audio->setEnabled(on); });
+    connect(volume, &QSlider::valueChanged, this,
+            [this](int v) { audio->setVolume(v); });
     emu->setFps(fpsTarget);
     emu->start();
 
@@ -205,6 +219,8 @@ void MainWindow::buildUi()
     volume->setRange(0, 100);
     volume->setValue(70);
     volume->setFocusPolicy(Qt::NoFocus);
+
+    volume->setToolTip(QStringLiteral("音量（MIDI 背景音乐不受此滑块控制）"));
     soundRow->addWidget(soundOn);
     soundRow->addWidget(volume);
     form->addRow(QStringLiteral("声音"), soundRow);
@@ -312,6 +328,12 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *ev)
 
     if (ke->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))
         return QMainWindow::eventFilter(obj, ev);
+
+    if (ke->key() == Qt::Key_L) {
+        if (t == QEvent::KeyPress && !ke->isAutoRepeat())
+            emu->pushTouch(-1, -1, 11);
+        return true;
+    }
     const unsigned m = keyToMask(ke->key());
 
     if (!m || ke->isAutoRepeat())

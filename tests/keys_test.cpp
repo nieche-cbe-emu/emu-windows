@@ -17,6 +17,9 @@ constexpr unsigned OK_MASK = (1u << 5) | (1u << 14);
 constexpr unsigned UP_MASK = (1u << 2) | (1u << 17);
 constexpr unsigned LSK_MASK = 1u << 12;
 constexpr unsigned K1_MASK = 1u << 19;
+constexpr unsigned END_MASK = 1u << 13;
+constexpr unsigned STAR_MASK = 1u << 23;
+constexpr unsigned POUND_MASK = 1u << 25;
 }
 
 class KeysTest : public QObject {
@@ -27,6 +30,7 @@ private slots:
     void gameKeysReachEmulator();
     void arrowsDoNotMoveLibrary();
     void enterDoesNotActivateLibraryItem();
+    void rightSoftKeyHasNoBit();
     void modalDialogStillGetsTyping();
     void shortcutsWithModifiersPassThrough();
 
@@ -60,6 +64,9 @@ void KeysTest::gameKeysReachEmulator_data()
     QTest::newRow("↑") << int(Qt::Key_Up) << UP_MASK;
     QTest::newRow("K") << int(Qt::Key_K) << LSK_MASK;
     QTest::newRow("1") << int(Qt::Key_1) << K1_MASK;
+    QTest::newRow("Esc") << int(Qt::Key_Escape) << END_MASK;
+    QTest::newRow("-") << int(Qt::Key_Minus) << STAR_MASK;
+    QTest::newRow("=") << int(Qt::Key_Equal) << POUND_MASK;
 }
 
 void KeysTest::gameKeysReachEmulator()
@@ -110,6 +117,21 @@ void KeysTest::enterDoesNotActivateLibraryItem()
 
     QTest::keyClick(lib, Qt::Key_Return);
     QCOMPARE(activated.count(), 0);
+}
+
+void KeysTest::rightSoftKeyHasNoBit()
+{
+    MainWindow w;
+    w.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&w));
+    auto *lib = w.findChild<QListWidget *>();
+    QVERIFY(lib);
+    lib->setFocus();
+
+    QTest::keyPress(lib, Qt::Key_L);
+    QCOMPARE(w.keyboardMask(), 0u);
+    QTest::keyRelease(lib, Qt::Key_L);
+    QCOMPARE(w.keyboardMask(), 0u);
 }
 
 void KeysTest::modalDialogStillGetsTyping()

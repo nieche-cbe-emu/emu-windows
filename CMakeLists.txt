@@ -27,9 +27,15 @@ qt_add_executable(NiecheEmu WIN32
     src/screenview.h
     src/keypad.cpp
     src/keypad.h
+    src/audioout.cpp
+    src/audioout.h
 )
 target_include_directories(NiecheEmu PRIVATE "${NIECHE_DIR}/emuffi")
 target_link_libraries(NiecheEmu PRIVATE Qt6::Widgets)
+if (WIN32)
+    # MCI（出声）在 winmm 里。系统自带的 GS 合成器是唯一能放 .mid 的东西。
+    target_link_libraries(NiecheEmu PRIVATE winmm)
+endif()
 
 if (MSVC)
     # **主线程栈必须加大。** unicorn 的代码生成很吃栈，MSVC 默认只给 1MB，
@@ -65,10 +71,15 @@ if (NIECHE_TESTS)
         src/screenview.h
         src/keypad.cpp
         src/keypad.h
+        src/audioout.cpp
+        src/audioout.h
     )
     set_target_properties(keys_test PROPERTIES WIN32_EXECUTABLE FALSE)
     target_include_directories(keys_test PRIVATE src "${NIECHE_DIR}/emuffi")
     target_link_libraries(keys_test PRIVATE Qt6::Widgets Qt6::Test)
+    if (WIN32)
+        target_link_libraries(keys_test PRIVATE winmm)
+    endif()
     if (MSVC)
         target_link_options(keys_test PRIVATE "/STACK:8388608")
     endif()

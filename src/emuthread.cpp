@@ -84,6 +84,7 @@ void EmuThread::run()
             break;
         if (doStop) {
             core.close();
+            emit audioEvent(QStringLiteral("{\"kind\":\"audio\",\"op\":\"stop\"}"));
             emit statusChanged(QStringLiteral("已停止"), 0, 0);
         }
         if (!toStart.isEmpty()) {
@@ -133,10 +134,13 @@ void EmuThread::run()
 
         bool bye = false;
         for (const QString &e : core.takeEvents()) {
-            if (e.contains(QStringLiteral("\"exit\"")))
+
+            if (e.contains(QStringLiteral("\"kind\":\"exit\"")))
                 bye = true;
-            else if (e.contains(QStringLiteral("\"log\"")))
+            else if (e.contains(QStringLiteral("\"kind\":\"log\"")))
                 emit logLine(e);
+            else if (e.contains(QStringLiteral("\"kind\":\"audio\"")))
+                emit audioEvent(e);
         }
         if (bye) {
             core.close();

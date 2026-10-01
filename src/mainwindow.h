@@ -2,6 +2,7 @@
 #pragma once
 #include <QMainWindow>
 
+#include "audioout.h"
 #include "emuthread.h"
 
 class QCheckBox;
@@ -41,6 +42,7 @@ private:
     void applyKeys();
 
     EmuThread *emu = nullptr;
+    AudioOut *audio = nullptr;
 
     ScreenView *screen = nullptr;
     Keypad *pad = nullptr;

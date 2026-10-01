@@ -23,6 +23,8 @@ public:
 
 signals:
     void frameReady(const QImage &img);
+
+    void audioEvent(const QString &json);
     void statusChanged(const QString &title, int w, int h);
     void fpsMeasured(double fps);
     void logLine(const QString &line);

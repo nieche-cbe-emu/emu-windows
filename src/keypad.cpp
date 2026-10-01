@@ -5,7 +5,8 @@
 
 namespace keys {
 constexpr unsigned LSK = 1u << 12;
-constexpr unsigned RSK = 1u << 13;
+
+constexpr unsigned END = 1u << 13;
 constexpr unsigned CALL = 1u << 20;
 constexpr unsigned UP = (1u << 2) | (1u << 17);
 constexpr unsigned DOWN = (1u << 8) | (1u << 18);
@@ -34,11 +35,12 @@ Keypad::Keypad(QWidget *parent) : QWidget(parent)
 
     struct Item { const char *label; unsigned mask; int r, c, rs, cs; int soft; };
     static const Item items[] = {
-        {"左软键", keys::LSK, 0, 0, 1, 3, 0},
-        {"右软键", keys::RSK, 0, 3, 1, 3, 1},
+
+        {"左软键", keys::LSK, 0, 0, 1, 3, -1},
+        {"右软键", 0, 0, 3, 1, 3, 1},
         {"呼叫", keys::CALL, 1, 0, 1, 2, -1},
         {"▲", keys::UP, 1, 2, 1, 2, -1},
-        {"挂断", 0, 1, 4, 1, 2, -1},
+        {"挂断", keys::END, 1, 4, 1, 2, -1},
         {"◀", keys::LEFT, 2, 0, 1, 2, -1},
         {"OK", keys::OK, 2, 2, 1, 2, -1},
         {"▶", keys::RIGHT, 2, 4, 1, 2, -1},
