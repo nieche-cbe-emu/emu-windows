@@ -44,3 +44,34 @@ add_executable(probe src/probe.c)
 if (MSVC)
     target_link_options(probe PRIVATE "/STACK:8388608")
 endif()
+
+# 按键回归测试（emu-windows#1）。默认不建，CI 用 -DNIECHE_TESTS=ON 打开。
+# 不需要 nieche.dll：核心加载失败时外壳照常起界面，按键链路与核心无关。
+option(NIECHE_TESTS "构建 Qt 外壳的回归测试" OFF)
+if (NIECHE_TESTS)
+    enable_testing()
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    # 用 add_executable 而不是 qt_add_executable：测试要的是控制台程序，
+    # ctest 才读得到输出
+    add_executable(keys_test
+        tests/keys_test.cpp
+        src/mainwindow.cpp
+        src/mainwindow.h
+        src/core.cpp
+        src/core.h
+        src/emuthread.cpp
+        src/emuthread.h
+        src/screenview.cpp
+        src/screenview.h
+        src/keypad.cpp
+        src/keypad.h
+    )
+    set_target_properties(keys_test PROPERTIES WIN32_EXECUTABLE FALSE)
+    target_include_directories(keys_test PRIVATE src "${NIECHE_DIR}/emuffi")
+    target_link_libraries(keys_test PRIVATE Qt6::Widgets Qt6::Test)
+    if (MSVC)
+        target_link_options(keys_test PRIVATE "/STACK:8388608")
+    endif()
+    # -o -,txt：QtTest 的逐条结果直接打到标准输出，失败时 ctest 日志里看得到
+    add_test(NAME keys COMMAND keys_test -o -,txt)
+endif()

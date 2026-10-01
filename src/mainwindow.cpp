@@ -3,6 +3,7 @@
 #include "keypad.h"
 #include "screenview.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
@@ -54,7 +55,9 @@ unsigned keyToMask(int k)
     case Qt::Key_S: case Qt::Key_Down:  return (1u << 8) | (1u << 18);
     case Qt::Key_A: case Qt::Key_Left:  return (1u << 4) | (1u << 15);
     case Qt::Key_D: case Qt::Key_Right: return (1u << 6) | (1u << 16);
-    case Qt::Key_J: case Qt::Key_Space: case Qt::Key_Return: return (1u << 5) | (1u << 14);
+
+    case Qt::Key_J: case Qt::Key_Space: case Qt::Key_Return: case Qt::Key_Enter:
+        return (1u << 5) | (1u << 14);
     case Qt::Key_K: return 1u << 12;
     case Qt::Key_L: return 1u << 13;
     case Qt::Key_U: return 1u << 20;
@@ -111,6 +114,8 @@ MainWindow::MainWindow(const QString &autoStart)
     emu->start();
 
     refreshLibrary();
+
+    qApp->installEventFilter(this);
 
     resize(1100, 760);
 
@@ -295,24 +300,26 @@ void MainWindow::askFps()
     emu->setFps(fpsTarget);
 }
 
-void MainWindow::keyPressEvent(QKeyEvent *e)
+bool MainWindow::eventFilter(QObject *obj, QEvent *ev)
 {
-    const unsigned m = keyToMask(e->key());
-    if (m && !e->isAutoRepeat()) {
-        kbMask |= m;
-        applyKeys();
-        return;
-    }
-    QMainWindow::keyPressEvent(e);
-}
+    const QEvent::Type t = ev->type();
+    if (t != QEvent::KeyPress && t != QEvent::KeyRelease)
+        return QMainWindow::eventFilter(obj, ev);
 
-void MainWindow::keyReleaseEvent(QKeyEvent *e)
-{
-    const unsigned m = keyToMask(e->key());
-    if (m && !e->isAutoRepeat()) {
+    if (QApplication::activeModalWidget())
+        return QMainWindow::eventFilter(obj, ev);
+    auto *ke = static_cast<QKeyEvent *>(ev);
+
+    if (ke->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))
+        return QMainWindow::eventFilter(obj, ev);
+    const unsigned m = keyToMask(ke->key());
+
+    if (!m || ke->isAutoRepeat())
+        return QMainWindow::eventFilter(obj, ev);
+    if (t == QEvent::KeyPress)
+        kbMask |= m;
+    else
         kbMask &= ~m;
-        applyKeys();
-        return;
-    }
-    QMainWindow::keyReleaseEvent(e);
+    applyKeys();
+    return true;
 }

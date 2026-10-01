@@ -23,12 +23,14 @@ public:
     explicit MainWindow(const QString &autoStart = QString());
 
 protected:
-    void keyPressEvent(QKeyEvent *) override;
-    void keyReleaseEvent(QKeyEvent *) override;
+
+    bool eventFilter(QObject *obj, QEvent *ev) override;
 
 public:
 
     static void trace(const QString &msg);
+
+    unsigned keyboardMask() const { return kbMask; }
 
 private:
     void buildUi();
