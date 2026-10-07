@@ -91,31 +91,53 @@ void AudioOut::handle(const QString &json)
         return;
     const QString op = o.value(QStringLiteral("op")).toString();
     if (op == QLatin1String("stop")) {
-        stop();
+        silence();
         return;
     }
     if (op != QLatin1String("play"))
         return;
     const QString path = o.value(QStringLiteral("path")).toString();
 
-    if (path.isEmpty())
+    if (path.isEmpty()) {
+        emit logLine(QStringLiteral("[音频] 核心没给出文件，放不了"));
         return;
-    cur = o.value(QStringLiteral("name")).toString();
+    }
     if (!on)
         return;
     play(path, o.value(QStringLiteral("loop")).toBool());
+
+    cur = o.value(QStringLiteral("name")).toString();
 }
 
 void AudioOut::play(const QString &path, bool loop)
 {
+#ifdef Q_OS_WIN
+    const QString alias = QString::fromWCharArray(ALIAS);
+
+    if (opened && curPath == path) {
+        looping = loop;
+        mci(QStringLiteral("seek %1 to start").arg(alias));
+        if (!mci(QStringLiteral("play %1").arg(alias))) {
+            timer->start();
+            return;
+        }
+
+    }
+#endif
     stop();
     looping = loop;
     curPath = path;
 #ifdef Q_OS_WIN
-    const QString alias = QString::fromWCharArray(ALIAS);
     const QString native = QDir::toNativeSeparators(path);
+    const QString type = mciType(path);
     MCIERROR e = mci(QStringLiteral("open \"%1\"%2 alias %3")
-                         .arg(mciPath(native), mciType(path), alias));
+                         .arg(mciPath(native), type, alias));
+    if (e && !type.isEmpty()) {
+
+        emit logLine(QStringLiteral("[音频]%1 打不开 %2（%3），换自动识别再试")
+                         .arg(type, native, mciError(e)));
+        e = mci(QStringLiteral("open \"%1\" alias %2").arg(mciPath(native), alias));
+    }
     if (e) {
         emit logLine(QStringLiteral("[音频] 打不开 %1：%2").arg(native, mciError(e)));
         return;
@@ -127,6 +149,12 @@ void AudioOut::play(const QString &path, bool loop)
         emit logLine(QStringLiteral("[音频] 放不了 %1：%2").arg(native, mciError(e)));
         stop();
         return;
+    }
+
+    if (!logged.contains(path)) {
+        logged.insert(path);
+        emit logLine(QStringLiteral("[音频] 开始播放 %1%2")
+                         .arg(native, loop ? QStringLiteral("（循环）") : QString()));
     }
     timer->start();
 #else
@@ -150,12 +178,28 @@ void AudioOut::poll()
     if (mode != QLatin1String("stopped"))
         return;
     if (!looping) {
-        stop();
+
+        timer->stop();
         return;
     }
     mci(QStringLiteral("seek %1 to start").arg(alias));
     if (mci(QStringLiteral("play %1").arg(alias)))
         stop();
+#endif
+}
+
+void AudioOut::silence()
+{
+    if (timer)
+        timer->stop();
+    looping = false;
+    cur.clear();
+#ifdef Q_OS_WIN
+    if (!opened)
+        return;
+    const QString alias = QString::fromWCharArray(ALIAS);
+    mci(QStringLiteral("stop %1").arg(alias));
+    mci(QStringLiteral("seek %1 to start").arg(alias));
 #endif
 }
 

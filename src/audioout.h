@@ -1,6 +1,7 @@
 
 #pragma once
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 class QTimer;
@@ -15,6 +16,9 @@ public:
     void setEnabled(bool on);
 
     void setVolume(int percent);
+
+    void silence();
+
     void stop();
 
     bool isEnabled() const { return on; }
@@ -33,5 +37,7 @@ private:
     bool opened = false;
     QString cur;
     QString curPath;
+
+    QSet<QString> logged;
     QTimer *timer = nullptr;
 };

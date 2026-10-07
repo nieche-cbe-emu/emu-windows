@@ -292,6 +292,8 @@ void MainWindow::startModule(const QString &path)
 void MainWindow::stopModule()
 {
     emu->requestStop();
+
+    audio->stop();
     kbMask = padMask = 0;
     emu->setKeys(0);
 }
