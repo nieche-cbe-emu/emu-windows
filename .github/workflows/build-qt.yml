@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        # **留空就不上传。** 以前默认值是一个真实的 tag，手动跑一次构建
-        # 就会把那个 release 的附件覆盖掉。
         description: 上传到哪个 release tag（留空＝只构建、不上传）
         required: false
         default: ''
@@ -20,9 +18,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: core ref
+        id: core
+        shell: bash
+        run: |
+          ref=$(tr -d ' \r\n' < CORE_REF)
+          test -n "$ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "核心提交 $ref"
+
       - uses: actions/checkout@v4
         with:
           repository: nieche-cbe-emu/emu-core-rs
+          ref: ${{ steps.core.outputs.ref }}
           path: core
 
       - uses: jurplel/install-qt-action@v4
@@ -35,10 +43,6 @@ jobs:
         with:
           arch: x64
 
-      # 模拟核心。unicorn 在这里能正常构建——它的 build.rs 用的是
-      # Visual Studio 自带的 cmake 与 ninja，runner 上装的 VS 带这些组件。
-      # **不要用 bash**：Git 自带的 /usr/bin/link 会挡住 MSVC 的 link.exe，
-      # 报的错是 "extra operand ... rcgu.o"，看着像 Rust 的问题，其实是链接器认错了。
       - name: build core dll
         shell: pwsh
         run: |
@@ -56,8 +60,6 @@ jobs:
         shell: pwsh
         run: cmake --build build --config Release
 
-      # 按键回归测试（#1：游戏库列表吃掉键盘）。
-      # 用 offscreen 平台插件跑，runner 上没有桌面会话也能建窗口、发按键。
       - name: keyboard test
         shell: pwsh
         env:
@@ -65,7 +67,6 @@ jobs:
         run: |
           ctest --test-dir build -C Release -V
 
-      # windeployqt 把 Qt 运行库拷到 exe 旁边，用户解压即用、不需要安装
       - name: deploy
         shell: pwsh
         run: |
@@ -77,10 +78,6 @@ jobs:
           windeployqt --release --no-translations --no-system-d3d-compiler NiecheEmu.exe
           Get-ChildItem | Select-Object -ExpandProperty Name
 
-      # 冒烟测试：确认 exe 能起来并把核心加载上。
-      # runner 上没有桌面会话，所以只验进程能启动到加载核心这一步。
-      # 在**原生 x64** 上跑一次最小探针：LoadLibrary + nieche_selftest。
-      # ARM 虚拟机里 x64 模拟下这一步会崩，需要确认真实 Windows 上是否正常。
       - name: probe（原生 x64 上验 JIT）
         shell: pwsh
         run: |
